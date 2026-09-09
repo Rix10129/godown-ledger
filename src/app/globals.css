@@ -1,0 +1,174 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
+  --muted: #64748b;
+  --heading: #0f172a;
+  --font-geist-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+[data-theme="dark"] {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --surface: #1e293b;
+  --surface-2: #0f172a;
+  --border: #334155;
+  --muted: #94a3b8;
+  --heading: #f1f5f9;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dark mode structural overrides */
+[data-theme="dark"] aside {
+  background: #0b1120 !important;
+  border-color: #1e293b !important;
+}
+
+[data-theme="dark"] aside p.text-\[11px\].text-slate-600 {
+  color: #475569 !important;
+}
+
+[data-theme="dark"] header {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .bg-white {
+  background-color: #1e293b !important;
+}
+
+[data-theme="dark"] .bg-slate-50 {
+  background-color: #0f172a !important;
+}
+
+[data-theme="dark"] .bg-slate-100 {
+  background-color: #0f172a !important;
+}
+
+[data-theme="dark"] .border-slate-200 {
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .border-slate-100 {
+  border-color: #1e293b !important;
+}
+
+[data-theme="dark"] .text-slate-900 {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .text-slate-800 {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .text-slate-600 {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .text-slate-500 {
+  color: #64748b !important;
+}
+
+[data-theme="dark"] .text-slate-400 {
+  color: #475569 !important;
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #475569 !important;
+}
+
+[data-theme="dark"] .divide-slate-100 > * + * {
+  border-color: #1e293b !important;
+}
+
+[data-theme="dark"] .divide-y > * + * {
+  border-color: #1e293b !important;
+}
+
+@media print {
+  @page {
+    margin: 0;
+    size: A4;
+  }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Light grays read fine on a backlit screen but wash out to near-invisible
+     on paper — darken them for anything actually printed (invoices, cash
+     memos, statements, quotations) without touching the on-screen palette. */
+  .text-slate-400,
+  .text-slate-500,
+  .text-slate-600 {
+    color: #1e293b !important;
+  }
+
+  /* Wide, many-column report tables (line-item sales/purchase registers,
+     aging, etc.) don't fit a portrait page even at a reduced font. Chrome's
+     print engine paginates an overflowing scroll container by tiling its
+     hidden columns onto extra pages instead of shrinking them, which is
+     what produced separate printouts per column group. Forcing the table
+     to the page's full width (with wrapping instead of nowrap) keeps it on
+     one flowing page instead of being split apart; pages that need more
+     breathing room also flip to landscape via their own <style> override
+     of @page (see the report page component) since a plain per-route
+     override is far more reliably honored by print engines than named
+     CSS pages. Long reports are expected to run across several printed
+     pages — the app shell's own print override (see the dashboard layout)
+     lets that content actually flow instead of being clipped to one
+     screen's height, so there's no need to crush the font down to fit
+     everything on a single page; keep it at a size that's still legible
+     on paper. */
+  .print-wide-report {
+    max-width: none !important;
+  }
+  .print-wide-report .overflow-x-auto {
+    overflow: visible !important;
+  }
+  .print-wide-report table {
+    font-size: 12px;
+    width: 100%;
+    table-layout: auto;
+  }
+  .print-wide-report th,
+  .print-wide-report td {
+    padding: 4px 6px !important;
+    white-space: normal !important;
+  }
+  .print-wide-report thead {
+    display: table-header-group;
+  }
+  .print-wide-report tr {
+    break-inside: avoid;
+  }
+}

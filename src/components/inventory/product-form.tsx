@@ -1,0 +1,142 @@
+"use client"
+
+import { useActionState } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { createProduct, updateProduct } from "@/app/(dashboard)/inventory/actions"
+
+const UNITS = [
+  { value: "METER", label: "Meter" },
+  { value: "YARD", label: "Yard" },
+  { value: "THAAN", label: "Thaan" },
+  { value: "ROLL", label: "Roll" },
+  { value: "KG", label: "Kilogram" },
+  { value: "CONE", label: "Cone" },
+  { value: "BAG", label: "Bag" },
+  { value: "PIECE", label: "Piece" },
+]
+
+type SupplierOption = { id: string; name: string }
+
+type ProductData = {
+  id: string
+  name: string
+  genericName: string | null
+  supplierId: string | null
+  unit: string
+  subUnit: string | null
+  unitsPerPack: number | null
+  salePrice: string
+  purchasePrice: string
+  reorderLevel: number
+  taxRate: string
+  description: string | null
+}
+
+interface ProductFormProps {
+  suppliers: SupplierOption[]
+  product?: ProductData
+}
+
+export function ProductForm({ suppliers, product }: ProductFormProps) {
+  const action = product ? updateProduct.bind(null, product.id) : createProduct
+  const [state, formAction, pending] = useActionState(action, null)
+
+  return (
+    <form action={formAction} className="space-y-5">
+      {state?.error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          {state.error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="name">Product Name *</Label>
+          <Input id="name" name="name" defaultValue={product?.name} required placeholder="e.g. Tylosin 200" />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="genericName">Generic / Salt Name</Label>
+          <Input id="genericName" name="genericName" defaultValue={product?.genericName ?? ""} placeholder="e.g. Tylosin Tartrate" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="supplierId">Default Supplier</Label>
+          <Select id="supplierId" name="supplierId" defaultValue={product?.supplierId ?? ""}>
+            <option value="">None</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="unit">Primary Unit *</Label>
+          <Select id="unit" name="unit" defaultValue={product?.unit ?? "PIECE"} required>
+            {UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="subUnit">Sub Unit</Label>
+          <Select id="subUnit" name="subUnit" defaultValue={product?.subUnit ?? ""}>
+            <option value="">None</option>
+            {UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="unitsPerPack">Units per Pack</Label>
+          <Input id="unitsPerPack" name="unitsPerPack" type="number" min="1" step="1"
+            defaultValue={product?.unitsPerPack ?? ""} placeholder="e.g. 100" />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="purchasePrice">Purchase Price *</Label>
+          <Input id="purchasePrice" name="purchasePrice" type="number" min="0.01" step="0.01"
+            defaultValue={product?.purchasePrice ?? ""} required placeholder="0.00" />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="salePrice">Sale Price *</Label>
+          <Input id="salePrice" name="salePrice" type="number" min="0.01" step="0.01"
+            defaultValue={product?.salePrice ?? ""} required placeholder="0.00" />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="reorderLevel">Reorder Level</Label>
+          <Input id="reorderLevel" name="reorderLevel" type="number" min="0" step="1"
+            defaultValue={product?.reorderLevel ?? 10} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="taxRate">Tax Rate (%)</Label>
+          <Input id="taxRate" name="taxRate" type="number" min="0" max="100" step="0.01"
+            defaultValue={product?.taxRate ?? "0"} />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="description">Description</Label>
+        <Textarea id="description" name="description" rows={3}
+          defaultValue={product?.description ?? ""} placeholder="Optional product notes" />
+      </div>
+
+      <div className="flex gap-3 pt-2">
+        <Button type="submit" loading={pending}>
+          {product ? "Update Product" : "Create Product"}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => history.back()}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  )
+}
