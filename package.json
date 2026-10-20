@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run db:generate && next build",
+    "build": "npm run db:generate && next build --webpack",
     "postbuild": "node scripts/finalize-hostinger-build.mjs",
     "build:hostinger": "HOSTINGER_DEPLOY=true npm run build",
     "start": "next start -H 0.0.0.0",
