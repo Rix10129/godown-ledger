@@ -28,6 +28,7 @@ import {
   CalendarClock,
   WifiOff,
   Landmark,
+  Moon,
 } from "lucide-react"
 
 const navSections = [
@@ -77,6 +78,7 @@ const navSections = [
     title: "Analytics",
     items: [
       { href: "/reports",              label: "Reports",       icon: BarChart3,  alert: false },
+      { href: "/reports/evening",      label: "Evening close", icon: Moon,       alert: false },
       { href: "/reports/targets",      label: "Sales Targets", icon: Target,     alert: false },
       { href: "/reports/pl",           label: "P&L Statement", icon: LineChart,  alert: false },
       { href: "/reports/balance-sheet", label: "Balance Sheet", icon: BarChart2,  alert: false },

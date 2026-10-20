@@ -2,6 +2,7 @@ import { Prisma, VoucherType, type PaymentMode } from "@prisma/client"
 import Decimal from "decimal.js"
 import { SYSTEM_ACCOUNTS, validateSystemAccounts, type SystemAccount } from "./system-accounts"
 import { allocateDocumentNumber } from "../document-number"
+import { directDealSides, type DirectPay } from "../direct-deal"
 
 type Tx = Prisma.TransactionClient
 type Amount = Prisma.Decimal | Decimal | number | string
@@ -50,6 +51,18 @@ async function post(tx: Tx, sourceType: string, p: Posting, debits: Side[], cred
 }
 
 export async function postSaleInvoice(tx: Tx, p: Posting) { const total=money(p.amount), tax=money(p.tax), paid=Decimal.min(money(p.paid),total); return post(tx,"SALE_INVOICE",p,[{account:funds(p.paymentMode,"in"),amount:paid},{account:"ACCOUNTS_RECEIVABLE",amount:total.minus(paid)}],[{account:"SALES",amount:total.minus(tax)},{account:"OUTPUT_TAX",amount:tax}]) }
+
+// Cloth that goes from the mill to the buyer and never enters the godown.
+// Stock is not moved. The buyer is charged and the mill is credited.
+export async function postDirectDeal(tx: Tx, p: Posting & { millPaymentMode?: PaymentMode }) {
+  const sides = directDealSides({
+    sale: p.amount,
+    cost: p.cost ?? 0,
+    buyerPays: (p.paymentMode ?? "CREDIT") as DirectPay,
+    millPays: (p.millPaymentMode ?? "CREDIT") as DirectPay,
+  })
+  return post(tx, "DIRECT_DEAL", { ...p, description: p.description ?? `Direct ${p.number}, never stocked` }, sides.debits as Side[], sides.credits as Side[])
+}
 
 // Finds whichever generation of a document's posting is currently active.
 // A document can be corrected more than once (see reverseAndRepost below);

@@ -5,12 +5,19 @@ import Link from "next/link"
 import {
   TrendingUp, ShoppingCart, Package, Users, Scale, ArrowRight,
   Clock, Wallet, FileText, UserCheck, MapPin, Receipt, Target,
-  LineChart, BarChart2, Landmark, ShieldCheck, ListTree,
+  LineChart, BarChart2, Landmark, ShieldCheck, ListTree, Moon,
 } from "lucide-react"
 
 export const metadata = { title: "Reports" }
 
 const REPORT_CARDS = [
+  {
+    title: "Evening close",
+    description: "Today's purchases, sales, recovery, and stock — ready to send on WhatsApp.",
+    href: "/reports/evening",
+    icon: Moon,
+    color: "bg-amber-50 text-amber-700 border-amber-200",
+  },
   {
     title: "Sales Report",
     description: "Date-wise and customer-wise sales summary with payment status.",
