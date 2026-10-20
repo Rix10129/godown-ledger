@@ -1,6 +1,8 @@
 import { getActiveSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { OfficeHeading, EmptyState } from "@/components/office-design";
 import { PriceReceiptForm } from "@/components/godown-forms";
 export default async function ReceiptsPage() {
   const session = await getActiveSession();
@@ -19,26 +21,49 @@ export default async function ReceiptsPage() {
     orderBy: { createdAt: "asc" },
   });
   return (
-    <div className="max-w-4xl space-y-5">
-      <h1 className="text-2xl font-bold">Cloth waiting for pricing</h1>
-      <p>
-        Review the godown keeper’s receipt, add rates and post it to stock and
-        the mill’s account.
-      </p>
+    <div className="space-y-6">
+      <OfficeHeading
+        kicker="02 / Godown & mills"
+        title="Cloth waiting for pricing"
+        action={
+          <Link href="/godown" className="office-button-quiet">
+            View stock
+          </Link>
+        }
+      >
+        Review each delivery, add its rates, and post it to stock and the mill’s
+        account.
+      </OfficeHeading>
       {receipts.map((r) => (
-        <section className="rounded border bg-white p-4" key={r.id}>
-          <h2 className="font-semibold">
-            {r.poNumber} · {r.supplier.name}
-          </h2>
-          {r.items.map((i) => (
-            <p key={i.id}>
-              {i.product.name} · {i.quantity} {i.product.unit}
-            </p>
-          ))}
-          <PriceReceiptForm id={r.id} />
+        <section className="office-panel" key={r.id}>
+          <div className="office-panel-head">
+            <h2>{r.supplier.name}</h2>
+            <span className="office-status office-status-waiting">
+              Waiting for a rate
+            </span>
+          </div>
+          <div className="office-panel-body">
+            <p className="mb-2 font-mono text-xs text-blue-600">{r.poNumber}</p>
+            {r.items.map((i) => (
+              <p className="text-sm" key={i.id}>
+                {i.product.name} ·{" "}
+                <span className="font-medium tabular-nums">
+                  {i.quantity} {i.product.unit}
+                </span>
+              </p>
+            ))}
+            <PriceReceiptForm id={r.id} />
+          </div>
         </section>
       ))}
-      {!receipts.length && <p>All received cloth has been priced.</p>}
+      {!receipts.length && (
+        <section className="office-panel">
+          <EmptyState title="All received cloth has been priced">
+            Any new receipt saved by the keeper will appear here for your
+            review.
+          </EmptyState>
+        </section>
+      )}
     </div>
   );
 }

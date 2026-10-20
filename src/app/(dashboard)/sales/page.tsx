@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, FileText, RotateCcw } from "lucide-react";
+import { OfficeHeading } from "@/components/office-design";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -75,49 +76,52 @@ export default async function SalesPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Sales</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {total} invoice{total !== 1 ? "s" : ""}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/sales/returns">
-            <Button variant="outline">
-              <RotateCcw className="h-4 w-4" />
-              Returns
-            </Button>
-          </Link>
-          <Link href="/sales/new">
-            <Button>
+      <OfficeHeading
+        kicker="03 / Bills & recovery"
+        title="Sales bills"
+        action={
+          <div className="flex flex-wrap gap-2">
+            {["OWNER", "ACCOUNTANT"].includes(session.user!.role) && (
+              <Link className="office-button-quiet" href="/sales/returns">
+                <RotateCcw className="h-4 w-4" />
+                Returns
+              </Link>
+            )}
+            <Link className="office-button" href="/sales/new">
               <Plus className="h-4 w-4" />
               New Invoice
-            </Button>
-          </Link>
-        </div>
-      </div>
+            </Link>
+          </div>
+        }
+      >
+        {total} {total === 1 ? "bill" : "bills"} · Cash sales and udhar, in one
+        place.
+      </OfficeHeading>
 
       <form method="GET" className="flex flex-wrap gap-3">
         <input
+          aria-label="Search bills"
           name="q"
           defaultValue={q}
           placeholder="Invoice number or customer…"
           className="h-9 w-64 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <input
+          aria-label="From date"
           name="from"
           type="date"
           defaultValue={from}
           className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
         />
         <input
+          aria-label="To date"
           name="to"
           type="date"
           defaultValue={to}
           className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
         />
         <select
+          aria-label="Payment mode"
           name="paymentMode"
           defaultValue={paymentMode ?? ""}
           className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
@@ -128,7 +132,7 @@ export default async function SalesPage({
           <option value="CHEQUE">Cheque</option>
           <option value="CREDIT">Credit</option>
         </select>
-        <select name="partyId" defaultValue={partyId}>
+        <select aria-label="Buyer" name="partyId" defaultValue={partyId}>
           <option value="">All customers</option>
           {customers.map((c) => (
             <option key={c.id} value={c.id}>
@@ -136,7 +140,7 @@ export default async function SalesPage({
             </option>
           ))}
         </select>
-        <select name="userId" defaultValue={userId}>
+        <select aria-label="Created by" name="userId" defaultValue={userId}>
           <option value="">All users</option>
           {users.map((u) => (
             <option key={u.id} value={u.id}>
@@ -144,13 +148,21 @@ export default async function SalesPage({
             </option>
           ))}
         </select>
-        <select name="paymentStatus" defaultValue={paymentStatus}>
+        <select
+          aria-label="Payment status"
+          name="paymentStatus"
+          defaultValue={paymentStatus}
+        >
           <option value="">All payment statuses</option>
           <option value="PAID">Paid</option>
           <option value="PARTIAL">Partial</option>
           <option value="UNPAID">Unpaid</option>
         </select>
-        <select name="status" defaultValue={status}>
+        <select
+          aria-label="Document status"
+          name="status"
+          defaultValue={status}
+        >
           <option value="">All document statuses</option>
           <option value="DRAFT">Draft</option>
           <option value="POSTED">Posted</option>
@@ -158,21 +170,23 @@ export default async function SalesPage({
           <option value="REVERSED">Reversed</option>
         </select>
         <input
+          aria-label="Minimum amount"
           name="minAmount"
           type="number"
           min="0"
           step="0.01"
           defaultValue={filters.minAmount}
-          placeholder="Min amount"
+          placeholder="Min Rs"
           className="h-9 w-28 rounded-lg border px-3 text-sm"
         />
         <input
+          aria-label="Maximum amount"
           name="maxAmount"
           type="number"
           min="0"
           step="0.01"
           defaultValue={filters.maxAmount}
-          placeholder="Max amount"
+          placeholder="Max Rs"
           className="h-9 w-28 rounded-lg border px-3 text-sm"
         />
         <Button type="submit" variant="outline" size="sm">

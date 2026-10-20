@@ -1,313 +1,267 @@
 "use client";
 
-import { canAccessPath } from "@/lib/desk-access";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
-import {
-  LayoutDashboard,
-  Package,
-  ShoppingCart,
-  Truck,
-  Users,
-  Building2,
-  BookOpen,
-  BarChart3,
-  Settings,
-  Factory,
-  Bell,
-  UserCog,
-  FileText,
-  Receipt,
-  AlertTriangle,
-  Target,
-  LineChart,
-  BarChart2,
-  ClipboardList,
-  MapPin,
-  Quote,
-  CalendarClock,
-  WifiOff,
-  Landmark,
-  Moon,
-  Menu,
-  X,
-} from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
+import { canAccessPath } from "@/lib/desk-access";
+import { DESK_LABELS } from "@/lib/office-branding";
+import { WovenMark } from "@/components/office-design";
 
-const navSections = [
+const groups = [
   {
-    title: "Godown",
+    id: "day",
+    title: "Day book",
     items: [
-      { href: "/godown", label: "Stock", icon: Package, alert: false },
-      { href: "/mills", label: "Mills", icon: Factory, alert: false },
+      { href: "/", label: "Overview" },
+      { href: "/alerts", label: "Alerts", alerts: true },
     ],
   },
   {
-    title: "Overview",
+    id: "godown",
+    title: "Godown & mills",
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard, alert: false },
-      { href: "/alerts", label: "Alerts", icon: Bell, alert: true },
+      { href: "/godown", label: "Godown stock" },
+      { href: "/mills", label: "Mills" },
+      { href: "/inventory", label: "Cloth products & lots" },
+      { href: "/receipts", label: "Price received cloth" },
+      { href: "/inventory/reorder", label: "Reorder sheet" },
+      { href: "/inventory/adjustments/new", label: "Stock adjustment" },
     ],
   },
   {
-    title: "Operations",
+    id: "sales",
+    title: "Bills & recovery",
     items: [
-      { href: "/inventory", label: "Inventory", icon: Package, alert: false },
-      {
-        href: "/inventory/reorder",
-        label: "Reorder Sheet",
-        icon: AlertTriangle,
-        alert: false,
-      },
-      {
-        href: "/inventory/adjustments/new",
-        label: "Stock Adjustment",
-        icon: ClipboardList,
-        alert: false,
-      },
-      {
-        href: "/receipts",
-        label: "Price received cloth",
-        icon: Package,
-        alert: false,
-      },
-      {
-        href: "/sales/direct",
-        label: "Direct deals",
-        icon: Truck,
-        alert: false,
-      },
-      {
-        href: "/reports/recovery",
-        label: "Recovery",
-        icon: Receipt,
-        alert: false,
-      },
-      { href: "/sales", label: "Sales", icon: ShoppingCart, alert: false },
-      { href: "/purchases", label: "Purchases", icon: Truck, alert: false },
-      { href: "/expenses", label: "Expenses", icon: Receipt, alert: false },
+      { href: "/sales", label: "Sales bills" },
+      { href: "/reports/recovery", label: "Recovery" },
+      { href: "/customers", label: "Buyers" },
+      { href: "/sales/direct", label: "Direct deals" },
+      { href: "/sales/returns", label: "Buyer returns" },
+      { href: "/quotations", label: "Quotations" },
+      { href: "/routes", label: "Routes" },
     ],
   },
   {
-    title: "People",
+    id: "books",
+    title: "Books & accounts",
     items: [
-      { href: "/customers", label: "Buyers", icon: Users, alert: false },
-      { href: "/suppliers", label: "Mills", icon: Building2, alert: false },
-      {
-        href: "/suppliers/schedule",
-        label: "Pay Schedule",
-        icon: CalendarClock,
-        alert: false,
-      },
+      { href: "/accounts", label: "Accounts & ledger" },
+      { href: "/accounts/bank", label: "Bank accounts" },
+      { href: "/accounts/pdc", label: "PDC cheques" },
+      { href: "/purchases", label: "Purchases" },
+      { href: "/suppliers", label: "Mill accounts" },
+      { href: "/suppliers/schedule", label: "Mill pay schedule" },
+      { href: "/expenses", label: "Expenses" },
     ],
   },
   {
-    title: "Sales",
+    id: "reports",
+    title: "Evening & reports",
     items: [
-      { href: "/quotations", label: "Quotations", icon: Quote, alert: false },
-      { href: "/routes", label: "Routes", icon: MapPin, alert: false },
+      { href: "/reports/evening", label: "Evening note" },
+      { href: "/reports", label: "All reports" },
+      { href: "/reports/pl", label: "Profit & loss" },
+      { href: "/reports/balance-sheet", label: "Balance sheet" },
+      { href: "/reports/targets", label: "Sales targets" },
     ],
   },
   {
-    title: "Finance",
-    items: [
-      { href: "/accounts", label: "Accounts", icon: BookOpen, alert: false },
-      {
-        href: "/accounts/bank",
-        label: "Bank Accounts",
-        icon: Landmark,
-        alert: false,
-      },
-      {
-        href: "/accounts/pdc",
-        label: "PDC Cheques",
-        icon: FileText,
-        alert: false,
-      },
-    ],
-  },
-  {
-    title: "Analytics",
-    items: [
-      { href: "/reports", label: "Reports", icon: BarChart3, alert: false },
-      {
-        href: "/reports/evening",
-        label: "Evening close",
-        icon: Moon,
-        alert: false,
-      },
-      {
-        href: "/reports/targets",
-        label: "Sales Targets",
-        icon: Target,
-        alert: false,
-      },
-      {
-        href: "/reports/pl",
-        label: "P&L Statement",
-        icon: LineChart,
-        alert: false,
-      },
-      {
-        href: "/reports/balance-sheet",
-        label: "Balance Sheet",
-        icon: BarChart2,
-        alert: false,
-      },
-    ],
-  },
-  {
+    id: "more",
     title: "More",
     items: [
-      {
-        href: "/people",
-        label: "People and pins",
-        icon: UserCog,
-        alert: false,
-        adminOnly: true,
-      },
-      { href: "/settings", label: "Settings", icon: Settings, alert: false },
+      { href: "/people", label: "People and pins" },
+      { href: "/settings", label: "Settings & office file" },
+      { href: "/user-guide.html", label: "Office guide" },
     ],
   },
 ];
-
-interface SidebarProps {
-  alertCount?: number;
-  role?: string;
-  companyName?: string;
-  logoUrl?: string | null;
-}
 
 export function Sidebar({
   alertCount = 0,
   role,
   companyName,
   logoUrl,
-}: SidebarProps) {
+}: {
+  alertCount?: number;
+  role?: string;
+  companyName?: string;
+  logoUrl?: string | null;
+}) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isManager = role === "OWNER" || role === "ADMIN";
-
-  // Find the single most-specific nav item that matches the current path.
-  // Without this, a parent like "/inventory" would also highlight when
-  // a child like "/inventory/adjustments/new" is active.
-  const allItems = navSections.flatMap((s) => s.items);
-  const activeHref = allItems.reduce((best, item) => {
-    const matches =
-      item.href === "/"
-        ? pathname === "/"
-        : pathname === item.href || pathname.startsWith(item.href + "/");
-    return matches && item.href.length > best.length ? item.href : best;
-  }, "");
-
+  const [expanded, setExpanded] = useState<string>();
+  const navigation = useRef<HTMLElement>(null);
+  const visible = groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) =>
+          canAccessPath(role, item.href) &&
+          (item.href !== "/" || role === "OWNER"),
+      ),
+    }))
+    .filter((group) => group.items.length);
+  const activeHref = visible
+    .flatMap((g) => g.items)
+    .reduce((best, item) => {
+      const match =
+        item.href === "/"
+          ? pathname === "/"
+          : pathname === item.href || pathname.startsWith(item.href + "/");
+      return match && item.href.length > best.length ? item.href : best;
+    }, "");
+  const activeGroup = visible.find((g) =>
+    g.items.some((item) => item.href === activeHref),
+  )?.id;
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const focusable = () =>
+      Array.from(
+        navigation.current?.querySelectorAll<HTMLElement>(
+          "a[href],button:not([disabled])",
+        ) ?? [],
+      ).filter((el) => el.getClientRects().length);
+    focusable()[0]?.focus();
+    const keydown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+      if (e.key === "Tab") {
+        const list = focusable(),
+          first = list[0],
+          last = list.at(-1);
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        }
+        if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => {
+      document.removeEventListener("keydown", keydown);
+      previous?.focus();
+    };
+  }, [mobileOpen]);
+  const navigate = () => {
+    setMobileOpen(false);
+    setExpanded(undefined);
+  };
   return (
     <>
       <button
         aria-label="Open navigation"
         aria-expanded={mobileOpen}
+        aria-controls="office-navigation"
         onClick={() => setMobileOpen(true)}
-        className="fixed left-3 top-3 z-30 rounded border border-slate-300 bg-white p-2 md:hidden print:hidden"
+        className="fixed left-3 top-4 z-30 rounded-md border border-slate-300 bg-white p-2 text-blue-600 md:hidden print:hidden"
       >
         <Menu className="h-5 w-5" />
       </button>
       {mobileOpen && (
         <button
+          tabIndex={-1}
           aria-label="Close navigation overlay"
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-30 bg-slate-950/60 md:hidden print:hidden"
+          className="fixed inset-0 z-30 bg-black/50 md:hidden print:hidden"
         />
       )}
       <aside
+        id="office-navigation"
+        ref={navigation}
         aria-label="Main navigation"
-        className={`${mobileOpen ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 w-60 bg-slate-900 flex-col border-r border-slate-800 shrink-0 h-full md:static md:flex print:hidden`}
+        className={`office-sidebar ${mobileOpen ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 shrink-0 flex-col h-full md:static md:flex print:hidden`}
       >
         <button
           aria-label="Close navigation"
           onClick={() => setMobileOpen(false)}
-          className="absolute right-2 top-2 p-1 text-slate-300 md:hidden"
+          className="absolute right-2 top-2 p-1 text-white md:hidden"
         >
           <X className="h-5 w-5" />
         </button>
-        {/* Logo */}
-        <div className="px-4 py-4 border-b border-slate-800">
-          <div className="flex items-center gap-2.5">
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt={companyName ?? "Logo"}
-                className="w-8 h-8 rounded-lg object-contain bg-white/10 shrink-0"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center shrink-0">
-                <Factory className="w-4 h-4 text-blue-400" />
-              </div>
-            )}
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-white leading-tight truncate">
-                {companyName ?? "Godown Ledger"}
-              </p>
-              <p className="text-[11px] text-slate-500 leading-tight">
-                Mill-to-Market Trading
-              </p>
-            </div>
+        <div className="office-identity">
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt=""
+              className="h-11 w-11 rounded-lg object-contain"
+            />
+          ) : (
+            <WovenMark />
+          )}
+          <div className="min-w-0">
+            <strong className="truncate">
+              {companyName ?? "Godown Ledger"}
+            </strong>
+            <small>The office book</small>
           </div>
         </div>
-
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-4">
-          {navSections.map((section) => (
-            <div key={section.title}>
-              <p className="px-2 mb-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                {section.title}
-              </p>
-              <ul className="space-y-0.5">
-                {section.items
-                  .filter(
-                    (item) =>
-                      canAccessPath(role, item.href) &&
-                      (item.href !== "/" || role === "OWNER") &&
-                      (!(item as any).adminOnly || role === "OWNER"),
-                  )
-                  .map((item) => {
-                    const Icon = item.icon;
-                    const isActive = item.href === activeHref;
-                    const badge = item.alert ? alertCount : 0;
-
-                    return (
-                      <li key={item.href}>
-                        <Link
-                          href={item.href}
-                          onClick={() => setMobileOpen(false)}
-                          className={cn(
-                            "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                            isActive
-                              ? "bg-blue-600 text-white"
-                              : "text-slate-400 hover:text-white hover:bg-slate-800",
-                          )}
-                        >
-                          <Icon className="w-4 h-4 shrink-0" />
-                          <span className="flex-1 min-w-0 truncate">
-                            {item.label}
-                          </span>
-                          {badge > 0 && (
-                            <span className="shrink-0 min-w-[1.2rem] h-5 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
-                              {badge > 99 ? "99+" : badge}
-                            </span>
-                          )}
-                        </Link>
-                      </li>
-                    );
-                  })}
-              </ul>
-            </div>
-          ))}
-        </nav>
-
-        <div className="px-4 py-3 border-t border-slate-800">
-          <p className="text-[11px] text-slate-600 text-center">
-            Godown Ledger · v1.0
+        <nav aria-label="Office sections">
+          <p className="mb-4 px-3 text-[10px] uppercase tracking-[.18em] text-[#d2e2d6]">
+            Your workspace
           </p>
+          {visible.map((group) => {
+            const active = activeGroup === group.id;
+            const open = (expanded ?? activeGroup) === group.id;
+            const code = String(
+              groups.findIndex((g) => g.id === group.id) + 1,
+            ).padStart(2, "0");
+            return (
+              <div key={group.id} className="office-nav-group">
+                <div className={`office-nav-heading ${active ? "active" : ""}`}>
+                  <Link href={group.items[0].href} onClick={navigate}>
+                    <span>{code}</span>
+                    {group.title}
+                  </Link>
+                  {group.items.length > 1 && (
+                    <button
+                      aria-label={`Expand ${group.title}`}
+                      aria-expanded={open}
+                      aria-controls={`nav-${group.id}`}
+                      onClick={() => setExpanded(open ? "" : group.id)}
+                    >
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                  )}
+                </div>
+                {open && group.items.length > 1 && (
+                  <div id={`nav-${group.id}`} className="office-nav-children">
+                    {group.items.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={navigate}
+                        aria-current={
+                          item.href === activeHref ? "page" : undefined
+                        }
+                      >
+                        {item.label}
+                        {"alerts" in item && alertCount > 0 && (
+                          <span className="rounded bg-[#f6efd9] px-1.5 text-[10px] text-[#805513]">
+                            {alertCount}
+                          </span>
+                        )}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+        <div className="office-nav-footer">
+          <strong>{DESK_LABELS[role ?? ""] ?? "Personal"}’s desk</strong>
+          <p>
+            {role === "OWNER"
+              ? "All office work available"
+              : "Your work, in the shared office book"}
+          </p>
+          <p className="mt-1 text-[10px]">Godown Ledger · {companyName}</p>
         </div>
       </aside>
     </>

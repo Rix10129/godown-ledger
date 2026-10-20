@@ -1,122 +1,120 @@
 "use client";
-
-import { LiveDeskUpdates } from "@/components/live-desk-updates";
 import { useState } from "react";
 import Link from "next/link";
 import { signIn, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
-import { Bell, ChevronDown, LogOut, User } from "lucide-react";
+import { Bell, ChevronDown, LogOut } from "lucide-react";
+import { LiveDeskUpdates } from "@/components/live-desk-updates";
 import { DarkModeToggle } from "@/components/dark-mode-toggle";
-
-const roleBadge: Record<string, string> = {
-  OWNER: "bg-purple-100 text-purple-700 border-purple-200",
-  ADMIN: "bg-blue-100   text-blue-700   border-blue-200",
-  CASHIER: "bg-green-100  text-green-700  border-green-200",
-  SALESMAN: "bg-orange-100 text-orange-700 border-orange-200",
-};
-
-interface TopbarProps {
+import { canAccessPath } from "@/lib/desk-access";
+import { DESK_LABELS } from "@/lib/office-branding";
+export function Topbar({
+  session,
+  alertCount = 0,
+  dateLabel,
+}: {
   session: Session;
   alertCount?: number;
-}
-
-export function Topbar({ session, alertCount = 0 }: TopbarProps) {
-  const [open, setOpen] = useState(false);
-  const user = session.user as any;
-  const initials = (user.name as string)
+  dateLabel: string;
+}) {
+  const [open, setOpen] = useState(false),
+    [leaving, setLeaving] = useState(false);
+  const user = session.user!;
+  const initials = (user.name ?? "Office")
     .split(" ")
     .slice(0, 2)
-    .map((n: string) => n[0])
+    .map((n) => n[0])
     .join("")
     .toUpperCase();
-
   return (
-    <header className="h-13 bg-white border-b border-slate-200 flex items-center justify-between pl-14 pr-3 md:px-6 shrink-0 print:hidden">
-      <span className="hidden md:inline text-sm font-semibold text-slate-800">
-        {user.companyName}
-      </span>
-
-      <div className="flex items-center gap-2">
+    <header className="office-topbar flex items-center justify-between gap-3 shrink-0 print:hidden">
+      <div className="min-w-0">
+        <p className="office-company-name truncate">{user.companyName}</p>
+        <p className="office-company-date hidden sm:block">
+          {dateLabel} · Pakistan
+        </p>
+      </div>
+      <div className="flex items-center gap-1.5 sm:gap-3">
         <LiveDeskUpdates />
         <button
-          className="rounded border border-slate-300 px-3 py-2 text-sm font-medium"
+          disabled={leaving}
+          className="office-button-quiet shrink-0 !px-2.5 !text-xs sm:!px-4"
           onClick={async () => {
-            localStorage.setItem("godown-desk-lock", String(Date.now()));
-            const result = await signIn("credentials", {
-              mode: "leave",
-              redirect: false,
-            });
-            if (result?.ok) window.location.assign("/desk");
-            else await signOut({ callbackUrl: "/login" });
+            setLeaving(true);
+            try {
+              localStorage.setItem("godown-desk-lock", String(Date.now()));
+              const result = await signIn("credentials", {
+                mode: "leave",
+                redirect: false,
+              });
+              if (result?.ok) window.location.assign("/desk");
+              else await signOut({ callbackUrl: "/login" });
+            } catch {
+              await signOut({ callbackUrl: "/login" });
+            }
           }}
         >
-          Leave the desk
+          {leaving ? "Leaving…" : "Leave the desk"}
         </button>
         <DarkModeToggle />
-        {/* Alert bell */}
-        <Link
-          href="/alerts"
-          className="relative p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-          title={alertCount > 0 ? `${alertCount} alerts` : "Alerts"}
-        >
-          <Bell className="w-4.5 h-4.5" />
-          {alertCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] flex items-center justify-center bg-red-500 rounded-full ring-2 ring-white text-white text-[10px] font-bold px-0.5">
-              {alertCount > 99 ? "99+" : alertCount}
-            </span>
-          )}
-        </Link>
-
-        {/* User menu */}
+        {canAccessPath(user.role, "/alerts") && (
+          <Link
+            href="/alerts"
+            aria-label={alertCount ? `${alertCount} alerts` : "Alerts"}
+            className="relative hidden rounded-md p-2 text-slate-600 hover:bg-slate-100 sm:inline-flex"
+          >
+            <Bell className="h-4 w-4" />
+            {alertCount > 0 && (
+              <span className="absolute -right-1 -top-1 rounded-full bg-amber-100 px-1.5 text-[10px] text-amber-800">
+                {alertCount}
+              </span>
+            )}
+          </Link>
+        )}
         <div className="relative">
           <button
-            onClick={() => setOpen((o) => !o)}
-            className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            aria-label="Open user menu"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+            className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-slate-100"
           >
-            <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50 text-xs font-semibold text-blue-600">
               {initials}
-            </div>
-            <div className="text-left hidden sm:block leading-none">
-              <p className="text-xs font-semibold text-slate-900">
-                {user.name}
-              </p>
-              <span
-                className={`inline-block mt-0.5 px-1.5 py-px text-[10px] font-semibold rounded border ${
-                  roleBadge[user.role] ??
-                  "bg-slate-100 text-slate-500 border-slate-200"
-                }`}
-              >
-                {user.role}
+            </span>
+            <span className="hidden text-left sm:block">
+              <span className="block text-xs font-medium">{user.name}</span>
+              <span className="block text-[10px] uppercase tracking-wider text-slate-500">
+                {DESK_LABELS[user.role] ?? user.role}
               </span>
-            </div>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
+            </span>
+            <ChevronDown className="hidden h-3 w-3 text-slate-500 sm:block" />
           </button>
-
           {open && (
             <>
-              <div
-                className="fixed inset-0 z-10"
+              <button
+                tabIndex={-1}
+                aria-label="Close user menu"
+                className="fixed inset-0 z-10 cursor-default"
                 onClick={() => setOpen(false)}
               />
-              <div className="absolute right-0 mt-1.5 w-52 bg-white rounded-xl border border-slate-200 shadow-lg z-20 overflow-hidden py-1">
-                <div className="px-4 py-2.5 border-b border-slate-100">
-                  <p className="text-sm font-semibold text-slate-900 truncate">
-                    {user.name}
-                  </p>
-                  <p className="text-xs text-slate-500 truncate">
+              <div
+                className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setOpen(false);
+                }}
+              >
+                <div className="border-b border-slate-200 px-3 py-3">
+                  <p className="truncate text-sm font-medium">{user.name}</p>
+                  <p className="mt-1 truncate text-xs text-slate-500">
                     {user.email}
                   </p>
                 </div>
-                <button className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
-                  <User className="w-4 h-4 text-slate-400" />
-                  Profile
-                </button>
                 <button
                   onClick={() => signOut({ callbackUrl: "/login" })}
-                  className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  className="flex w-full items-center gap-2 rounded px-3 py-3 text-sm text-red-700 hover:bg-red-50"
                 >
-                  <LogOut className="w-4 h-4" />
-                  Sign out
+                  <LogOut className="h-4 w-4" />
+                  Sign out of the office
                 </button>
               </div>
             </>

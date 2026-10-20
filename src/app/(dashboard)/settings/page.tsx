@@ -92,7 +92,7 @@ export default async function SettingsPage() {
         </h2>
         <p className="text-sm text-slate-500 mb-4">
           Export a complete Excel report with Sales, Purchases, Inventory, and
-          Receivables. Automatically emailed to the owner every 15 days.
+          Receivables. Download a copy for the office file.
         </p>
         <div className="flex flex-wrap gap-3">
           <ReportDownloadButton days={15} label="Last 15 Days" />
