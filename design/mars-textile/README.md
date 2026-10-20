@@ -1,6 +1,8 @@
 # Mars Textile · Visual proposal
 
-A separate preview of the proposed warm-white and deep-green design. The live application has not been changed. Figures are sample zero states, and this preview is not connected to a database.
+The original warm-white and deep-green proposal is preserved below. After approval, the design was implemented in the working app. **[See the implemented application screenshots](implemented/README.md).**
+
+The original interactive preview uses sample zero states and is not connected to a database.
 
 The uploaded Grok prototype's visual source was reviewed: paper backgrounds, serif headings, simple bordered panels and compact numbered navigation. This proposal uses those ideas with Mars Textile branding, a woven-grid mark and the agreed green palette.
 
@@ -27,4 +29,4 @@ Download this branch with **Code → Download ZIP**, unzip it, and open `design/
 
 All four screens, screen switching, the mobile navigation drawer and 390px page width were checked in Chromium. No browser JavaScript errors occurred. Core text contrast ratios were checked: secondary text 5.00:1, main text 14.18:1, white on green 8.35:1 and amber text 5.66:1. These are selected colour checks, not a complete accessibility audit.
 
-No application routes, business data, database schema, server authorization or production deployment configuration were changed by this preview.
+The original static preview changed no application routes, business data, database schema, server authorization or production deployment configuration. The subsequent working-app visual release is documented separately.
