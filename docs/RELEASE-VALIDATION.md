@@ -19,6 +19,8 @@ The GitHub ZIP is the older Next.js/PostgreSQL application. The newer Grok ZIP i
 
 ## Dependencies and limits
 
+Hostinger deployment follow-up: the default `npm run build` with `HOSTINGER_DEPLOY=true` passed its full production build and postbuild migrations against a local QA database. The database preparation also passed with bootstrap variables removed and with repeated bootstrap; a missing database URL correctly stopped preparation. This verifies the supplied deployment command locally, not Hostinger deployment or the client's Neon connection.
+
 Next.js 16.4.2, NextAuth 4.24.15 and Prisma 7.10.1 are pinned. Final `npm audit --omit=dev` reported **zero known production vulnerabilities**. The full development tree retains five high-severity advisories through the ESLint glob/braces tooling; the registry had no compatible stable braces fix when reviewed. Do not expose development tooling as a network service. An audit result is not a security certification.
 
 Hostinger plan capability, actual production database, DNS/HTTPS, office connectivity, provider delivery, external scheduler and offsite backup destination require verification on the actual account. None is represented as deployed or verified here. GitHub main has not been published by this release work.

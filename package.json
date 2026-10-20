@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "npm run db:generate && next build",
-    "build:hostinger": "npm run build && npm run db:deploy && node scripts/create-company.mjs --if-configured",
+    "postbuild": "node scripts/finalize-hostinger-build.mjs",
+    "build:hostinger": "HOSTINGER_DEPLOY=true npm run build",
     "start": "next start -H 0.0.0.0",
     "lint": "eslint",
     "test": "tsx --test $(find src -name '*.test.ts' -print)",
