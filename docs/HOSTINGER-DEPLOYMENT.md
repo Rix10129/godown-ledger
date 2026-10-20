@@ -79,11 +79,13 @@ Cloud operation requires an Internet connection. Private HTML and financial page
 
 ## 6. Evening delivery and offsite backups
 
-Manual WhatsApp/email share buttons work by opening the person's messaging application. They do NOT send automatically. For automation, configure the provider and schedule below. No real provider send has been performed by the development tests.
+**Manual Excel sharing requires no new environment variables.** In Evening note, choose **Prepare Excel for WhatsApp**. Supported browsers offer **Share Excel file**: choose WhatsApp and the recipient, then send. Otherwise download the prepared `.xlsx`, open WhatsApp, and use **Attach → Document**. WhatsApp web links cannot attach a local file automatically. Email the note opens a text draft; attach the downloaded workbook yourself. Manual buttons require the person to finish sending. For automation, configure the provider and schedule below. No real provider send has been performed by the development tests.
 
-**Email:** supply `RESEND_API_KEY` and `RESEND_FROM_EMAIL` using a verified sending domain. Set the company's email in Settings. Provider acceptance is recorded; inbox delivery still needs a real acceptance test.
+**Email:** supply `RESEND_API_KEY` and `RESEND_FROM_EMAIL` using a verified sending domain. Set the company's email in Settings. Scheduled email now includes the Excel workbook as an attachment. Provider acceptance is recorded; inbox delivery still needs a real acceptance test.
 
 **WhatsApp:** optional Meta Cloud API setup requires an approved business sender, an approved template with exactly one body text parameter, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_API_VERSION` (a version supported by your provider), `WHATSAPP_TEMPLATE_NAME`, `WHATSAPP_TEMPLATE_LANGUAGE`, and `EVENING_WHATSAPP_TO` in international digits without `+`. The automatic template carries a short summary plus a link to the full note. The manual share button contains the full note. Provider approval and real delivery are external prerequisites. Unknown sends are held for operator review rather than retried blindly.
+
+Scheduled WhatsApp remains an approved **text summary**. Excel attachments use the manual phone share/download flow above; this release does not claim automatic Excel delivery through a WhatsApp template. Scheduled email includes the workbook, frozen with the original outbox message so retries retain identical figures and bytes. Contract tests use fake transports; verify actual received messages before promising automatic delivery.
 
 **Backups:** configure a private R2 bucket with `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, or the documented encrypted email backup destination (`ADMIN_EMAIL` and Resend). Keep the decryption key outside that storage account. Also enable database-provider backups/restore history appropriate to the client's tolerance for lost work; nightly application exports alone can lose up to a day's entries.
 

@@ -11,6 +11,7 @@ test("keepers cannot access financial pages, exports or staff administration", (
     "/accounts",
     "/reports",
     "/reports/evening",
+    "/api/reports/evening/export",
     "/api/export",
     "/api/reports/stock/export",
     "/inventory",
@@ -26,6 +27,7 @@ test("salesmen can bill and recover; only owner manages people", () => {
   assert.equal(canAccessPath("SALESMAN", "/sales/new"), true);
   assert.equal(canAccessPath("SALESMAN", "/reports/recovery"), true);
   assert.equal(canAccessPath("SALESMAN", "/reports/pl"), false);
+  assert.equal(canAccessPath("SALESMAN", "/api/reports/evening/export"), false);
   assert.equal(canAccessPath("ACCOUNTANT", "/people"), false);
   assert.equal(canAccessPath("OWNER", "/people"), true);
   assert.equal(canAccessPath("OWNER", "/sales/offline"), false);

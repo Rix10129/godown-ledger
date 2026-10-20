@@ -4,7 +4,18 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { OfficeHeading, EmptyState } from "@/components/office-design";
 import { ClothReceiptForm } from "@/components/godown-forms";
-export default async function GodownPage() {
+const movementLabels = {
+  PURCHASE: "Purchase received",
+  SALE: "Sales bill",
+  PURCHASE_RETURN: "Returned to mill",
+  SALE_RETURN: "Buyer return",
+  ADJUSTMENT: "Stock adjustment",
+};
+export default async function GodownPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ movementPage?: string | string[] }>;
+}) {
   const session = await getActiveSession();
   if (
     !session?.user ||
@@ -12,8 +23,18 @@ export default async function GodownPage() {
   )
     redirect("/desk");
   const companyId = session.user.companyId;
+  const requestedPage = (await searchParams).movementPage;
+  const movementCount = await db.stockMovement.count({ where: { companyId } });
+  const pageSize = 30;
+  const pageCount = Math.max(1, Math.ceil(movementCount / pageSize));
+  const movementPage = Math.min(
+    pageCount,
+    typeof requestedPage === "string" && /^[1-9]\d{0,5}$/.test(requestedPage)
+      ? Number(requestedPage)
+      : 1,
+  );
   // Deliberately select only physical stock data: no rates or money sent to the keeper.
-  const [lots, mills, products, waiting] = await Promise.all([
+  const [lots, mills, products, waiting, movements] = await Promise.all([
     db.productBatch.findMany({
       where: { companyId, quantity: { gt: 0 } },
       select: {
@@ -54,6 +75,21 @@ export default async function GodownPage() {
           },
         },
       },
+    }),
+    db.stockMovement.findMany({
+      where: { companyId },
+      select: {
+        id: true,
+        type: true,
+        quantity: true,
+        reference: true,
+        createdAt: true,
+        product: { select: { name: true, unit: true } },
+        batch: { select: { batchNumber: true } },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: (movementPage - 1) * pageSize,
+      take: pageSize,
     }),
   ]);
   const bookkeeper = session.user.role === "ACCOUNTANT";
@@ -231,6 +267,106 @@ export default async function GodownPage() {
             No unpriced receipts. New deliveries saved for pricing will appear
             here.
           </p>
+        )}
+      </section>
+      <section id="stock-movements" className="office-panel scroll-mt-6">
+        <div className="office-panel-head">
+          <h2>Stock movement history</h2>
+          <span className="office-status">{movementCount} movements</span>
+        </div>
+        <p className="office-note px-5 py-4">
+          Sales bills deduct stock automatically. Posted purchases, returns and
+          adjustments appear here. Unpriced receipts appear above.
+        </p>
+        {movements.length ? (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="px-5 py-3">Date · Pakistan</th>
+                    <th className="px-4 py-3">Movement</th>
+                    <th className="px-4 py-3">Cloth / lot</th>
+                    <th className="px-4 py-3">Reference</th>
+                    <th className="px-5 py-3 text-right">Quantity in / out</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movements.map((m) => {
+                    const quantity = Number(m.quantity);
+                    return (
+                      <tr
+                        key={m.id}
+                        className="border-b border-slate-200 last:border-0"
+                      >
+                        <td className="whitespace-nowrap px-5 py-4">
+                          {m.createdAt.toLocaleString("en-PK", {
+                            timeZone: "Asia/Karachi",
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="px-4 py-4">{movementLabels[m.type]}</td>
+                        <td className="px-4 py-4">
+                          <p className="font-medium">{m.product.name}</p>
+                          <p className="office-note mt-1">
+                            {m.batch?.batchNumber ?? "—"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4 font-mono text-xs">
+                          {m.reference ?? "—"}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4 text-right tabular-nums">
+                          <span className="mr-2 text-xs text-slate-500">
+                            {quantity > 0 ? "IN" : quantity < 0 ? "OUT" : "—"}
+                          </span>
+                          {Math.abs(quantity).toLocaleString("en-PK", {
+                            maximumFractionDigits: 3,
+                          })}{" "}
+                          {m.product.unit}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <nav
+              aria-label="Stock movement pages"
+              className="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-4"
+            >
+              {movementPage > 1 ? (
+                <Link
+                  className="office-button-quiet"
+                  href={`?movementPage=${movementPage - 1}#stock-movements`}
+                >
+                  Newer movements
+                </Link>
+              ) : (
+                <span />
+              )}
+              <span className="office-note">
+                Page {movementPage} of {pageCount}
+              </span>
+              {movementPage < pageCount ? (
+                <Link
+                  className="office-button-quiet"
+                  href={`?movementPage=${movementPage + 1}#stock-movements`}
+                >
+                  Older movements
+                </Link>
+              ) : (
+                <span />
+              )}
+            </nav>
+          </>
+        ) : (
+          <EmptyState title="No stock movements yet">
+            Posted transactions will build this history automatically.
+          </EmptyState>
         )}
       </section>
       <p className="office-note">

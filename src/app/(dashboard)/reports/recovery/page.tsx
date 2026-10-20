@@ -1,36 +1,38 @@
-import { calculateCustomerBalance } from "@/lib/customer-ledger"
-import { db } from "@/lib/db"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { redirect } from "next/navigation"
-import Link from "next/link"
-import { ChevronLeft, Printer, Users } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { ExportButtons } from "@/components/reports/export-buttons"
-import { formatCurrency } from "@/lib/utils"
-import { logAudit } from "@/lib/audit"
+import { ageReceivable } from "@/lib/receivable-aging";
+import { agingRelations } from "@/lib/receivable-aging-data";
+import { calculateCustomerBalance } from "@/lib/customer-ledger";
+import { db } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { ChevronLeft, Printer, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ExportButtons } from "@/components/reports/export-buttons";
+import { formatCurrency } from "@/lib/utils";
+import { logAudit } from "@/lib/audit";
 
-export const dynamic = "force-dynamic"
-export const metadata = { title: "Customer Recovery" }
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Customer Recovery" };
 
 const TYPE_LABELS: Record<string, string> = {
   RETAILER: "Retailer",
   WHOLESALER: "Wholesaler",
   GARMENT_UNIT: "Garment Unit",
   EXPORT_HOUSE: "Export House",
-}
+};
 
 export default async function RecoveryReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; area?: string; all?: string }>
+  searchParams: Promise<{ type?: string; area?: string; all?: string }>;
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/login")
-  const companyId = (session.user as any).companyId as string
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+  const companyId = (session.user as any).companyId as string;
 
-  const { type, area, all } = await searchParams
-  const showAll = all === "1"
+  const { type, area, all } = await searchParams;
+  const showAll = all === "1";
 
   logAudit({
     companyId,
@@ -38,7 +40,7 @@ export default async function RecoveryReportPage({
     userName: (session.user as any).name ?? "",
     action: "VIEW_REPORT",
     detail: "Customer Recovery Report",
-  })
+  });
 
   const customers = await db.customer.findMany({
     where: {
@@ -47,54 +49,78 @@ export default async function RecoveryReportPage({
       ...(area ? { area: { contains: area, mode: "insensitive" } } : {}),
     },
     orderBy: { name: "asc" },
-    include: {
-      invoices: { where: { status: "POSTED" }, select: { netAmount: true } },
-      payments: { where: { status: "POSTED" }, select: { amount: true, discountAmount: true } },
-      saleReturns: { where: { status: "POSTED" }, select: { totalAmount: true } },
-    },
-  })
+    include: agingRelations,
+  });
 
   const rows = customers
     .map((c) => {
       const totalInvoiced = c.invoices.reduce(
         (s, i) => s + parseFloat(i.netAmount.toString()),
-        0
-      )
-      const balance = calculateCustomerBalance({ openingBalance: c.openingBalance,
-        invoices: c.invoices, payments: c.payments, returns: c.saleReturns })
-      const totalPaid = balance.paid + balance.returned
-      const opening = balance.opening
-      const outstanding = balance.closingBalance
-      return { customer: c, opening, totalInvoiced, totalPaid, outstanding }
+        0,
+      );
+      const balance = calculateCustomerBalance({
+        openingBalance: c.openingBalance,
+        invoices: c.invoices,
+        payments: c.payments,
+        returns: c.saleReturns,
+      });
+      const oldestDueDays = ageReceivable(c).oldestDueDays;
+      const totalPaid = balance.paid + balance.returned;
+      const opening = balance.opening;
+      const outstanding = balance.closingBalance;
+      return {
+        customer: c,
+        opening,
+        totalInvoiced,
+        totalPaid,
+        outstanding,
+        oldestDueDays,
+      };
     })
     .filter((r) => showAll || r.outstanding > 0.001)
-    .sort((a, b) => b.outstanding - a.outstanding)
+    .sort(
+      (a, b) =>
+        b.oldestDueDays - a.oldestDueDays || b.outstanding - a.outstanding,
+    );
 
-  const grandOutstanding = rows.reduce((s, r) => s + r.outstanding, 0)
-  const grandInvoiced = rows.reduce((s, r) => s + r.totalInvoiced, 0)
+  const grandOutstanding = rows.reduce((s, r) => s + r.outstanding, 0);
+  const grandInvoiced = rows.reduce((s, r) => s + r.totalInvoiced, 0);
 
   // Unique areas for filter
-  const areas = [...new Set(customers.map((c) => c.area).filter(Boolean) as string[])].sort()
+  const areas = [
+    ...new Set(customers.map((c) => c.area).filter(Boolean) as string[]),
+  ].sort();
 
   return (
     <div className="space-y-6 max-w-5xl print-wide-report">
       {/* Matches the landscape orientation used by the server-generated PDF
           so a native browser print of this page lines up the same way. */}
-      <style>{"@media print { @page { size: A4 landscape; margin: 8mm; } }"}</style>
+      <style>
+        {"@media print { @page { size: A4 landscape; margin: 8mm; } }"}
+      </style>
       <div className="flex items-center justify-between print:hidden">
         <div className="flex items-center gap-3">
-          <Link href="/reports" className="text-slate-400 hover:text-slate-600 transition-colors">
+          <Link
+            href="/reports"
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+          >
             <ChevronLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Customer Recovery</h1>
+            <h1 className="text-2xl font-bold text-slate-900">
+              Customer Recovery
+            </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              {rows.length} customer{rows.length !== 1 ? "s" : ""} with outstanding balance
+              {rows.length} customer{rows.length !== 1 ? "s" : ""} with
+              outstanding balance · oldest overdue first
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <ExportButtons endpoint="/api/reports/recovery/export" params={{ type, area, ...(showAll ? { all: "1" } : {}) }} />
+          <ExportButtons
+            endpoint="/api/reports/recovery/export"
+            params={{ type, area, ...(showAll ? { all: "1" } : {}) }}
+          />
           <a
             href={`/api/reports/recovery/export?${new URLSearchParams({ ...(type ? { type } : {}), ...(area ? { area } : {}), ...(showAll ? { all: "1" } : {}), format: "pdf" }).toString()}`}
             target="_blank"
@@ -110,7 +136,8 @@ export default async function RecoveryReportPage({
       <div className="hidden print:block">
         <h1 className="text-lg font-bold text-slate-900">Customer Recovery</h1>
         <p className="text-xs text-slate-600">
-          {rows.length} customer{rows.length !== 1 ? "s" : ""} with outstanding balance
+          {rows.length} customer{rows.length !== 1 ? "s" : ""} with outstanding
+          balance · oldest overdue first
         </p>
       </div>
 
@@ -123,7 +150,9 @@ export default async function RecoveryReportPage({
         >
           <option value="">All types</option>
           {Object.entries(TYPE_LABELS).map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
+            <option key={v} value={v}>
+              {l}
+            </option>
           ))}
         </select>
         {areas.length > 0 && (
@@ -134,18 +163,29 @@ export default async function RecoveryReportPage({
           >
             <option value="">All areas</option>
             {areas.map((a) => (
-              <option key={a} value={a}>{a}</option>
+              <option key={a} value={a}>
+                {a}
+              </option>
             ))}
           </select>
         )}
         <label className="flex items-center gap-2 h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 cursor-pointer">
-          <input type="checkbox" name="all" value="1" defaultChecked={showAll} />
+          <input
+            type="checkbox"
+            name="all"
+            value="1"
+            defaultChecked={showAll}
+          />
           Show zero-balance
         </label>
-        <Button type="submit" variant="outline" size="sm">Filter</Button>
+        <Button type="submit" variant="outline" size="sm">
+          Filter
+        </Button>
         {(type || area || showAll) && (
           <Link href="/reports/recovery">
-            <Button variant="ghost" size="sm">Clear</Button>
+            <Button variant="ghost" size="sm">
+              Clear
+            </Button>
           </Link>
         )}
       </form>
@@ -153,18 +193,30 @@ export default async function RecoveryReportPage({
       {/* KPI row */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Customers</p>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+            Customers
+          </p>
           <p className="text-2xl font-bold text-slate-900">{rows.length}</p>
-          <p className="text-xs text-slate-400 mt-0.5">with outstanding balance</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            with outstanding balance
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Total Invoiced</p>
-          <p className="text-2xl font-bold text-slate-900">{formatCurrency(grandInvoiced)}</p>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+            Total Invoiced
+          </p>
+          <p className="text-2xl font-bold text-slate-900">
+            {formatCurrency(grandInvoiced)}
+          </p>
           <p className="text-xs text-slate-400 mt-0.5">in the selected group</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Outstanding</p>
-          <p className="text-2xl font-bold text-orange-600">{formatCurrency(grandOutstanding)}</p>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+            Outstanding
+          </p>
+          <p className="text-2xl font-bold text-orange-600">
+            {formatCurrency(grandOutstanding)}
+          </p>
           <p className="text-xs text-slate-400 mt-0.5">total receivables</p>
         </div>
       </div>
@@ -174,62 +226,108 @@ export default async function RecoveryReportPage({
         {rows.length === 0 ? (
           <div className="py-16 text-center">
             <Users className="h-8 w-8 text-slate-200 mx-auto mb-2" />
-            <p className="text-sm text-slate-400">No customers with outstanding balance</p>
+            <p className="text-sm text-slate-400">
+              No customers with outstanding balance
+            </p>
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-left px-5 py-2.5 font-medium text-slate-600">#</th>
-                <th className="text-left px-5 py-2.5 font-medium text-slate-600">Customer</th>
-                <th className="text-left px-5 py-2.5 font-medium text-slate-600">Type</th>
-                <th className="text-left px-5 py-2.5 font-medium text-slate-600">Area</th>
-                <th className="text-right px-5 py-2.5 font-medium text-slate-600">Opening</th>
-                <th className="text-right px-5 py-2.5 font-medium text-slate-600">Invoiced</th>
-                <th className="text-right px-5 py-2.5 font-medium text-slate-600">Paid</th>
-                <th className="text-right px-5 py-2.5 font-medium text-slate-600">Outstanding</th>
+                <th className="text-left px-5 py-2.5 font-medium text-slate-600">
+                  #
+                </th>
+                <th className="text-left px-5 py-2.5 font-medium text-slate-600">
+                  Customer
+                </th>
+                <th className="text-left px-5 py-2.5 font-medium text-slate-600">
+                  Type
+                </th>
+                <th className="text-left px-5 py-2.5 font-medium text-slate-600">
+                  Area
+                </th>
+                <th className="text-right px-5 py-2.5 font-medium text-slate-600">
+                  Opening
+                </th>
+                <th className="text-right px-5 py-2.5 font-medium text-slate-600">
+                  Invoiced
+                </th>
+                <th className="text-right px-5 py-2.5 font-medium text-slate-600">
+                  Paid
+                </th>
+                <th className="text-right px-5 py-2.5 font-medium text-slate-600">
+                  Outstanding
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map(({ customer, opening, totalInvoiced, totalPaid, outstanding }, idx) => (
-                <tr
-                  key={customer.id}
-                  className={`hover:bg-slate-50 ${outstanding > 50000 ? "bg-orange-50/30" : ""}`}
-                >
-                  <td className="px-5 py-2.5 text-slate-400 text-xs">{idx + 1}</td>
-                  <td className="px-5 py-2.5">
-                    <Link
-                      href={`/customers/${customer.id}`}
-                      className="font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      {customer.name}
-                    </Link>
-                    {customer.phone && (
-                      <p className="text-xs text-slate-400">{customer.phone}</p>
-                    )}
-                  </td>
-                  <td className="px-5 py-2.5 text-slate-500 text-xs">
-                    {TYPE_LABELS[customer.type] ?? customer.type}
-                  </td>
-                  <td className="px-5 py-2.5 text-slate-500 text-xs">{customer.area ?? "—"}</td>
-                  <td className="px-5 py-2.5 text-right font-mono text-slate-600">
-                    {opening !== 0 ? formatCurrency(opening) : "—"}
-                  </td>
-                  <td className="px-5 py-2.5 text-right font-mono text-slate-900">
-                    {formatCurrency(totalInvoiced)}
-                  </td>
-                  <td className="px-5 py-2.5 text-right font-mono text-green-700">
-                    {formatCurrency(totalPaid)}
-                  </td>
-                  <td className="px-5 py-2.5 text-right font-bold font-mono text-orange-600">
-                    {formatCurrency(outstanding)}
-                  </td>
-                </tr>
-              ))}
+              {rows.map(
+                (
+                  {
+                    customer,
+                    opening,
+                    totalInvoiced,
+                    totalPaid,
+                    outstanding,
+                    oldestDueDays,
+                  },
+                  idx,
+                ) => (
+                  <tr
+                    key={customer.id}
+                    className={`hover:bg-slate-50 ${outstanding > 50000 ? "bg-orange-50/30" : ""}`}
+                  >
+                    <td className="px-5 py-2.5 text-slate-400 text-xs">
+                      {idx + 1}
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <Link
+                        href={`/customers/${customer.id}`}
+                        className="font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        {customer.name}
+                      </Link>
+                      {customer.phone && (
+                        <p className="text-xs text-slate-400">
+                          {customer.phone}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-5 py-2.5 text-slate-500 text-xs">
+                      {TYPE_LABELS[customer.type] ?? customer.type}
+                    </td>
+                    <td className="px-5 py-2.5 text-slate-500 text-xs">
+                      {customer.area ?? "—"}
+                    </td>
+                    <td className="px-5 py-2.5 text-right font-mono text-slate-600">
+                      {opening !== 0 ? formatCurrency(opening) : "—"}
+                    </td>
+                    <td className="px-5 py-2.5 text-right font-mono text-slate-900">
+                      {formatCurrency(totalInvoiced)}
+                    </td>
+                    <td className="px-5 py-2.5 text-right font-mono text-green-700">
+                      {formatCurrency(totalPaid)}
+                    </td>
+                    <td className="px-5 py-2.5 text-right font-bold font-mono text-orange-600">
+                      {formatCurrency(outstanding)}
+                      <small className="block text-[10px] font-normal text-slate-500">
+                        {oldestDueDays > 0
+                          ? `Oldest due: ${oldestDueDays} days`
+                          : oldestDueDays === 0
+                            ? "Current / not overdue"
+                            : "Opening figure · age not entered"}
+                      </small>
+                    </td>
+                  </tr>
+                ),
+              )}
             </tbody>
             <tfoot className="border-t-2 border-slate-200 bg-slate-50">
               <tr>
-                <td colSpan={5} className="px-5 py-2.5 text-sm font-semibold text-right text-slate-700">
+                <td
+                  colSpan={5}
+                  className="px-5 py-2.5 text-sm font-semibold text-right text-slate-700"
+                >
                   Totals
                 </td>
                 <td className="px-5 py-2.5 text-right font-bold font-mono text-slate-900">
@@ -247,5 +345,5 @@ export default async function RecoveryReportPage({
         )}
       </div>
     </div>
-  )
+  );
 }

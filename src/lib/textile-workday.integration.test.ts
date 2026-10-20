@@ -4,6 +4,8 @@ import { db } from "./db";
 import { setAuthorizationSessionResolverForTests } from "./authorization";
 import { ledgerBalances } from "./accounting/ledger-report";
 import { assertStockReconciles } from "./inventory-reconciliation";
+import ExcelJS from "exceljs";
+import { buildEveningWorkbook } from "./evening-workbook";
 import { buildEveningReport } from "./evening-report";
 
 const enabled = process.env.RUN_DATABASE_CONCURRENCY_TESTS === "1";
@@ -446,6 +448,34 @@ test(
     assert.match(finalNote.text, /Returned by buyers/);
     assert.match(finalNote.text, /Returned to mills/);
     assert.equal(finalNote.totals.sales, "1534.50");
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(
+      new Uint8Array(
+        await buildEveningWorkbook({
+          ...finalNote,
+          company: { ...finalNote.company, name: "=1+1" },
+        }),
+      ).buffer,
+    );
+    assert.equal(
+      workbook.getWorksheet("Summary")!.getCell("A1").type,
+      ExcelJS.ValueType.String,
+    );
+    assert.equal(workbook.getWorksheet("Summary")!.getCell("B7").value, 1534.5);
+    assert.ok(workbook.getWorksheet("Purchases"));
+    assert.ok(workbook.getWorksheet("Recovery"));
+    assert.ok(workbook.getWorksheet("Buyer Dues"));
+    assert.ok(workbook.getWorksheet("Waiting for Rate"));
+    let exportedStockCost = 0;
+    workbook.getWorksheet("Stock")!.eachRow((row, n) => {
+      if (n > 5) exportedStockCost += Number(row.getCell(7).value);
+    });
+    assert.equal(exportedStockCost, Number(finalNote.totals.stockValue));
+    assert.equal(
+      workbook.getWorksheet("Stock")!.getColumn(4).numFmt,
+      "#,##0.000",
+    );
+
     const { dumpCompanyBackup } = await import("./company-backup-data");
     const { encryptBackup, decryptBackup, validateRestoredBackup } =
       await import("./company-backup");

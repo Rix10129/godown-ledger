@@ -1,3 +1,5 @@
+import { ageReceivable } from "@/lib/receivable-aging";
+import { agingRelations } from "@/lib/receivable-aging-data";
 import { NextRequest, NextResponse } from "next/server";
 import { authorize } from "@/lib/authorization";
 import { db } from "@/lib/db";
@@ -36,17 +38,7 @@ export async function GET(req: NextRequest) {
       ...(area ? { area: { contains: area, mode: "insensitive" } } : {}),
     },
     orderBy: { name: "asc" },
-    include: {
-      invoices: { where: { status: "POSTED" }, select: { netAmount: true } },
-      payments: {
-        where: { status: "POSTED" },
-        select: { amount: true, discountAmount: true },
-      },
-      saleReturns: {
-        where: { status: "POSTED" },
-        select: { totalAmount: true },
-      },
-    },
+    include: agingRelations,
   });
 
   const rows = customers
@@ -61,9 +53,11 @@ export async function GET(req: NextRequest) {
         payments: c.payments,
         returns: c.saleReturns,
       });
+      const oldestDueDays = ageReceivable(c).oldestDueDays;
       const totalPaid = balance.paid + balance.returned;
       return {
         customer: c,
+        oldestDueDays,
         opening: balance.opening,
         totalInvoiced,
         totalPaid,
@@ -71,7 +65,10 @@ export async function GET(req: NextRequest) {
       };
     })
     .filter((r) => showAll || r.outstanding > 0.001)
-    .sort((a, b) => b.outstanding - a.outstanding);
+    .sort(
+      (a, b) =>
+        b.oldestDueDays - a.oldestDueDays || b.outstanding - a.outstanding,
+    );
 
   const totals = rows.reduce(
     (t, r) => ({

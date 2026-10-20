@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { secureEquals } from "@/lib/secure-compare";
 import { buildEveningReport } from "@/lib/evening-report";
-import { deliverEvening } from "@/lib/evening-delivery";
+import { buildEveningWorkbook, eveningFilename } from "@/lib/evening-workbook";
+import { deliverEvening, freezeEveningFile } from "@/lib/evening-delivery";
 export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   if (
@@ -57,6 +58,8 @@ export async function GET(req: NextRequest) {
   const results = [];
   for (const company of companies) {
     const report = await buildEveningReport(company.id);
+    const workbook = await buildEveningWorkbook(report);
+    const filename = eveningFilename(report.company.name, report.date);
     const channels: { channel: string; recipient: string; text: string }[] = [];
     if (emailEnabled && report.company.email)
       channels.push({
@@ -84,7 +87,15 @@ export async function GET(req: NextRequest) {
       const delivery = await db.eveningDelivery.upsert({
         where: key,
         update: {},
-        create: { companyId: company.id, businessDate: report.date, ...target },
+        create: {
+          companyId: company.id,
+          businessDate: report.date,
+          ...target,
+          text:
+            target.channel === "EMAIL"
+              ? freezeEveningFile(target.text, filename, workbook)
+              : target.text,
+        },
       });
       // WhatsApp has no transport idempotency key: ambiguous sends are held for human review.
       if (delivery.status === "SENDING" && target.channel === "WHATSAPP") {

@@ -3,6 +3,8 @@ import { businessDate, businessDayBounds } from "./business-time";
 import { eveningCloseText } from "./evening-close";
 import { formatCurrency } from "./utils";
 import Decimal from "decimal.js";
+import { getReceivableAging } from "./receivable-aging-data";
+import { ledgerBalances } from "./accounting/ledger-report";
 export async function buildEveningReport(companyId: string, now = new Date()) {
   const date = businessDate(now),
     { start, end } = businessDayBounds(date);
@@ -13,11 +15,11 @@ export async function buildEveningReport(companyId: string, now = new Date()) {
     receipts,
     payments,
     batches,
-    entries,
-    inventory,
+    accounts,
     saleReturns,
     purchaseReturns,
     pendingReceipts,
+    buyerDues,
   ] = await Promise.all([
     db.company.findUniqueOrThrow({
       where: { id: companyId },
@@ -65,26 +67,19 @@ export async function buildEveningReport(companyId: string, now = new Date()) {
     db.productBatch.findMany({
       where: { companyId, quantity: { gt: 0 } },
       select: {
+        batchNumber: true,
         quantity: true,
         purchasePrice: true,
-        product: { select: { unit: true } },
-      },
-    }),
-    db.journalEntry.findMany({
-      where: { companyId, status: { in: ["POSTED", "REVERSED"] } },
-      select: {
-        lines: {
-          select: { amount: true, debitAccountId: true, creditAccountId: true },
+        product: {
+          select: {
+            name: true,
+            unit: true,
+            supplier: { select: { name: true } },
+          },
         },
       },
     }),
-    db.account.findUnique({
-      where: { code_companyId: { code: "1200", companyId } },
-      select: {
-        debitLines: { select: { amount: true } },
-        creditLines: { select: { amount: true } },
-      },
-    }),
+    ledgerBalances(companyId),
     db.saleReturn.findMany({
       where: {
         companyId,
@@ -112,6 +107,7 @@ export async function buildEveningReport(companyId: string, now = new Date()) {
         items: { include: { product: { select: { name: true, unit: true } } } },
       },
     }),
+    getReceivableAging(companyId, now),
   ]);
   const money = (value: { toString(): string } | number) =>
     formatCurrency(value.toString());
@@ -128,19 +124,13 @@ export async function buildEveningReport(companyId: string, now = new Date()) {
       new Decimal(batch.quantity).times(batch.purchasePrice.toString()),
     );
   }
-  for (const entry of entries)
-    for (const line of entry.lines) {
-      if (line.debitAccountId) debit = debit.plus(line.amount.toString());
-      if (line.creditAccountId) credit = credit.plus(line.amount.toString());
-    }
-  const inventoryBalance = (inventory?.debitLines ?? [])
-    .reduce((s, l) => s.plus(l.amount.toString()), new Decimal(0))
-    .minus(
-      (inventory?.creditLines ?? []).reduce(
-        (s, l) => s.plus(l.amount.toString()),
-        new Decimal(0),
-      ),
-    );
+  for (const account of accounts) {
+    debit = debit.plus(account.debit);
+    credit = credit.plus(account.credit);
+  }
+  const inventoryBalance = new Decimal(
+    accounts.find((a) => a.code === "1200")?.net ?? 0,
+  );
   const balanced =
     debit.equals(credit) && inventoryBalance.minus(stockValue).abs().lt("0.02");
   const text = eveningCloseText({
@@ -188,6 +178,19 @@ export async function buildEveningReport(companyId: string, now = new Date()) {
   return {
     text,
     date,
+    generatedAt: now.toISOString(),
+    data: {
+      purchases,
+      sales,
+      receipts,
+      payments,
+      batches,
+      accounts,
+      saleReturns,
+      purchaseReturns,
+      pendingReceipts,
+      buyerDues,
+    },
     company,
     balanced,
     totals: {
