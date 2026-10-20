@@ -56,9 +56,9 @@ export function LiveDeskUpdates() {
   }, [pathname, router]);
   return (
     <span
-      className={`hidden lg:inline text-xs ${online ? "text-green-700" : "text-amber-700"}`}
+      className={`hidden lg:inline text-xs ${online ? "text-slate-500" : "text-amber-700"}`}
     >
-      {online ? "● Shared office book" : "Reconnect to update the book"}
+      {online ? "Shared office book" : "Reconnect to update the book"}
     </span>
   );
 }

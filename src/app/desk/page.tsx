@@ -1,14 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { signIn, signOut } from "next-auth/react";
-const labels: Record<string, string> = {
-  OWNER: "Owner",
-  STOREKEEPER: "Godown keeper",
-  SALESMAN: "Salesman",
-  ACCOUNTANT: "Bookkeeper",
-  CASHIER: "Cashier",
-  ADMIN: "Administrator",
-};
+import { AuthShell } from "@/components/office-design";
+import { DESK_LABELS as labels } from "@/lib/office-branding";
 export default function DeskPage() {
   const [desk, setDesk] = useState<{
     company: string;
@@ -63,90 +57,114 @@ export default function DeskPage() {
       setBusy(false);
     }
   }
+  const person = desk?.people.find((p) => p.id === personId);
+  const access: Record<string, string> = {
+    OWNER: "All office work. Keep the owner PIN private.",
+    STOREKEEPER: "Mills and stock. Financial work stays closed.",
+    SALESMAN: "Bills and recovery. Books stay closed.",
+    CASHIER: "Bills and recovery. Books stay closed.",
+    ACCOUNTANT: "Recovery, books, the evening note and ledger.",
+  };
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-5">
-      <div className="w-full max-w-md space-y-5">
-        <p className="text-sm text-blue-300">
-          {desk?.company ?? "Opening the mill…"}
-        </p>
-        <h1 className="text-3xl font-bold">
-          {desk?.needsOwnerPin ? "Set the owner PIN" : "Who is sitting here?"}
-        </h1>
-        <p className="text-slate-300">
-          {desk?.needsOwnerPin
-            ? "The owner sets this once, then adds each person under More → People and pins."
-            : "One mill login. Each person opens only their own work."}
-        </p>
-        <form onSubmit={open} className="space-y-4">
-          {!desk?.needsOwnerPin && (
-            <label className="block">
-              Person
-              <select
-                aria-label="Person"
-                className="mt-2 w-full rounded border border-slate-600 bg-slate-900 p-3"
-                value={personId}
-                onChange={(e) => setPersonId(e.target.value)}
-              >
-                {desk?.people.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} · {labels[p.role] ?? p.role}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label className="block">
-            4-digit PIN
+    <AuthShell companyName={desk?.company}>
+      <p className="office-kicker">
+        {desk?.company ?? "Opening the office…"} · Personal desk
+      </p>
+      <h1>
+        {desk?.needsOwnerPin ? "Set the owner PIN" : "Who’s at the desk?"}
+      </h1>
+      <p className="office-intro">
+        {desk?.needsOwnerPin
+          ? "Set your private owner PIN, then add each person under More → People and pins."
+          : "Choose your name and enter your own four-digit PIN."}
+      </p>
+      <form onSubmit={open}>
+        {!desk?.needsOwnerPin && (
+          <label className="office-field">
+            Your name
+            <select
+              aria-label="Person"
+              className="office-control"
+              value={personId}
+              disabled={!desk || busy}
+              onChange={(e) => {
+                setPersonId(e.target.value);
+                setPin("");
+                setError("");
+              }}
+            >
+              {!desk && <option>Loading people…</option>}
+              {desk?.people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {labels[p.role] ?? p.role}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="office-field">
+          4-digit PIN
+          <input
+            aria-label="4-digit PIN"
+            className="office-control office-pin"
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            pattern="[0-9]{4}"
+            minLength={4}
+            maxLength={4}
+            placeholder="••••"
+            required
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+          />
+        </label>
+        {desk?.needsOwnerPin && (
+          <label className="office-field">
+            Confirm PIN
             <input
-              aria-label="4-digit PIN"
-              className="mt-2 w-full rounded border border-slate-600 bg-slate-900 p-3"
+              aria-label="Confirm PIN"
+              className="office-control office-pin"
               type="password"
               inputMode="numeric"
               autoComplete="off"
               pattern="[0-9]{4}"
-              minLength={4}
               maxLength={4}
               required
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ""))}
             />
           </label>
-          {desk?.needsOwnerPin && (
-            <label className="block">
-              Confirm PIN
-              <input
-                aria-label="Confirm PIN"
-                className="mt-2 w-full rounded border border-slate-600 bg-slate-900 p-3"
-                type="password"
-                inputMode="numeric"
-                autoComplete="off"
-                pattern="[0-9]{4}"
-                maxLength={4}
-                required
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ""))}
-              />
-            </label>
-          )}
-          {error && (
-            <p role="alert" className="text-red-300">
-              {error}
+        )}
+        {person && (
+          <div className="mb-5 rounded-lg border border-slate-200 bg-white p-3">
+            <p className="text-xs font-semibold text-blue-600">
+              {labels[person.role] ?? person.role}’s desk
             </p>
-          )}
-          <button
-            disabled={busy || !desk}
-            className="w-full rounded bg-blue-600 p-3 font-semibold disabled:opacity-50"
-          >
-            {busy ? "Checking…" : "Open my work"}
-          </button>
-        </form>
-        <button
-          className="text-sm text-slate-400 underline"
-          onClick={() => signOut({ callbackUrl: "/login" })}
-        >
-          Sign out of this mill
+            <p className="office-note mt-1">
+              {access[person.role] ??
+                "Only work assigned to this desk is available."}
+            </p>
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="office-alert mb-5">
+            {error}
+          </p>
+        )}
+        <button disabled={busy || !desk} className="office-button">
+          {busy ? "Checking…" : "Open my work"}
         </button>
-      </div>
-    </main>
+      </form>
+      <button
+        className="office-button-quiet mt-3"
+        onClick={() => signOut({ callbackUrl: "/login" })}
+      >
+        Sign out of this office
+      </button>
+      <p className="office-note mt-6 text-center">
+        Leave the desk when you finish.
+      </p>
+    </AuthShell>
   );
 }

@@ -4,8 +4,8 @@
   "description": "Textile Trading & Mill-to-Market Management",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#2563eb",
+  "background_color": "#f7f5ef",
+  "theme_color": "#225744",
   "orientation": "portrait-primary",
   "icons": [
     {

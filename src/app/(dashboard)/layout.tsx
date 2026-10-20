@@ -71,6 +71,12 @@ export default async function DashboardLayout({
     // print:h-auto/print:overflow-visible let the real document height
     // flow through so the browser can paginate it normally.
     <div className="flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible print:block">
+      <a
+        href="#office-main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-white focus:p-3"
+      >
+        Skip to office work
+      </a>
       <Sidebar
         alertCount={alertCount}
         role={role}
@@ -78,9 +84,22 @@ export default async function DashboardLayout({
         logoUrl={company?.logoUrl}
       />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden print:overflow-visible print:h-auto print:block">
-        <Topbar session={session} alertCount={alertCount} />
+        <Topbar
+          session={session}
+          alertCount={alertCount}
+          dateLabel={new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Asia/Karachi",
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          }).format(new Date())}
+        />
         <OfflineBanner />
-        <main className="flex-1 overflow-auto p-4 md:p-6 print:overflow-visible print:h-auto">
+        <main
+          id="office-main"
+          className="office-main flex-1 overflow-auto print:overflow-visible print:h-auto"
+        >
           {children}
         </main>
       </div>

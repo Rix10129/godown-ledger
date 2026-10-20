@@ -1,3 +1,4 @@
+import { OfficeHeading } from "@/components/office-design";
 import { getActiveSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { buildEveningReport } from "@/lib/evening-report";
@@ -9,17 +10,16 @@ export default async function EveningPage() {
   const report = await buildEveningReport(session.user.companyId);
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <h1 className="text-2xl font-bold">Evening note</h1>
-      <p>
-        Today in Pakistan time. Includes direct deals and checks stock cost
-        against the books.
-      </p>
-      <pre className="whitespace-pre-wrap rounded border bg-white p-5 text-sm leading-6">
+      <OfficeHeading kicker="05 / Evening & reports" title="Evening note">
+        Today in Pakistan time. Direct deals, recovery, returns and the stock
+        check, ready to share.
+      </OfficeHeading>
+      <pre className="office-panel whitespace-pre-wrap break-words p-5 font-mono text-xs leading-7 sm:p-7 sm:text-sm">
         {report.text}
       </pre>
       <div className="flex flex-wrap gap-3">
         <a
-          className="rounded bg-green-800 p-3 text-white"
+          className="office-button"
           href={`https://wa.me/?text=${encodeURIComponent(report.text)}`}
           target="_blank"
           rel="noreferrer"
@@ -27,7 +27,7 @@ export default async function EveningPage() {
           Share on WhatsApp
         </a>
         <a
-          className="rounded bg-slate-900 p-3 text-white"
+          className="office-button-quiet"
           href={`mailto:?subject=${encodeURIComponent(`${report.company.name} — evening ${report.date}`)}&body=${encodeURIComponent(report.text)}`}
         >
           Email the note
