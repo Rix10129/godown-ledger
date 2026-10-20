@@ -1,9 +1,11 @@
-import { Prisma } from "@prisma/client"
+import type { Transaction as LedgerTransaction } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 
-type Transaction = Prisma.TransactionClient
+type Transaction = LedgerTransaction;
 
 export const DOCUMENT_NUMBER_PREFIXES = {
   SALE_INVOICE: "INV",
+  DIRECT_DEAL: "DD",
   CASH_MEMO: "CM",
   PURCHASE_ORDER: "PO",
   SALE_RETURN: "SR",
@@ -17,12 +19,12 @@ export const DOCUMENT_NUMBER_PREFIXES = {
   JOURNAL_ENTRY: "JE",
   DISCOUNT: "DS",
   OPENING_BALANCE: "OB",
-} as const
+} as const;
 
-export type DocumentNumberType = keyof typeof DOCUMENT_NUMBER_PREFIXES
+export type DocumentNumberType = keyof typeof DOCUMENT_NUMBER_PREFIXES;
 
 export function financialYear(date: Date): number {
-  return date.getUTCFullYear()
+  return date.getUTCFullYear();
 }
 
 /**
@@ -36,7 +38,7 @@ export async function allocateDocumentNumber(
   documentType: DocumentNumberType,
   date: Date,
 ): Promise<string> {
-  const year = financialYear(date)
+  const year = financialYear(date);
   const rows = await tx.$queryRaw<Array<{ lastValue: number }>>(Prisma.sql`
     INSERT INTO "DocumentSequence"
       ("id", "companyId", "documentType", "financialYear", "lastValue", "createdAt", "updatedAt")
@@ -47,10 +49,11 @@ export async function allocateDocumentNumber(
       "lastValue" = "DocumentSequence"."lastValue" + 1,
       "updatedAt" = CURRENT_TIMESTAMP
     RETURNING "lastValue"
-  `)
-  const value = Number(rows[0]?.lastValue)
-  if (!Number.isSafeInteger(value) || value < 1) throw new Error("Failed to allocate document number")
-  return `${DOCUMENT_NUMBER_PREFIXES[documentType]}-${year}-${String(value).padStart(5, "0")}`
+  `);
+  const value = Number(rows[0]?.lastValue);
+  if (!Number.isSafeInteger(value) || value < 1)
+    throw new Error("Failed to allocate document number");
+  return `${DOCUMENT_NUMBER_PREFIXES[documentType]}-${year}-${String(value).padStart(5, "0")}`;
 }
 
 // Printed reports have limited width and don't need the full
@@ -60,6 +63,6 @@ export async function allocateDocumentNumber(
 // document type (INV-2026-00001 and CM-2026-00001 can coexist), so
 // dropping it would make two different documents look identical.
 export function compactDocumentNumber(fullNumber: string): string {
-  const match = fullNumber.match(/^([A-Z]+)-\d{4}-0*(\d+)$/)
-  return match ? `${match[1]}-${match[2]}` : fullNumber
+  const match = fullNumber.match(/^([A-Z]+)-\d{4}-0*(\d+)$/);
+  return match ? `${match[1]}-${match[2]}` : fullNumber;
 }

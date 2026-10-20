@@ -44,3 +44,7 @@ next-env.d.ts
 .env.local
 .env.*.local
 
+
+# Public template only; all real environment files remain ignored.
+!.env.example
+/release/

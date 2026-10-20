@@ -1,24 +1,80 @@
-import assert from "node:assert/strict"
-import test from "node:test"
+import assert from "node:assert/strict";
+import test from "node:test";
 
-import { validateInvoicePayment } from "./customer-payment"
+import { validateInvoicePayment } from "./customer-payment";
 
-const invoice = { id: "inv-1", companyId: "co-1", customerId: "cust-1", netAmount: "100.00", status: "POSTED" }
+const invoice = {
+  id: "inv-1",
+  companyId: "co-1",
+  customerId: "cust-1",
+  netAmount: "100.00",
+  status: "POSTED",
+};
 
 test("invoice allocation derives paid amount only from posted CustomerPayment rows", () => {
-  const result = validateInvoicePayment({ invoice, companyId: "co-1", customerId: "cust-1", amount: 40,
-    postedPayments: [{ amount: 25 }, { amount: "10.00" }] })
-  assert.deepEqual(result, { paid: 35, remaining: 65, newPaidAmount: 75 })
-})
+  const result = validateInvoicePayment({
+    invoice,
+    companyId: "co-1",
+    customerId: "cust-1",
+    amount: 40,
+    postedPayments: [{ amount: 25 }, { amount: "10.00" }],
+  });
+  assert.deepEqual(result, { paid: 35, remaining: 65, newPaidAmount: 75 });
+});
 
 test("rejects cross-customer and cross-company invoice allocations", () => {
-  for (const selection of [{ companyId: "co-2", customerId: "cust-1" }, { companyId: "co-1", customerId: "cust-2" }]) {
-    assert.throws(() => validateInvoicePayment({ invoice, ...selection, amount: 1, postedPayments: [] }),
-      /selected customer and company/)
+  for (const selection of [
+    { companyId: "co-2", customerId: "cust-1" },
+    { companyId: "co-1", customerId: "cust-2" },
+  ]) {
+    assert.throws(
+      () =>
+        validateInvoicePayment({
+          invoice,
+          ...selection,
+          amount: 1,
+          postedPayments: [],
+        }),
+      /selected customer and company/,
+    );
   }
-})
+});
 
 test("rejects an invoice overpayment instead of creating an implicit credit", () => {
-  assert.throws(() => validateInvoicePayment({ invoice, companyId: "co-1", customerId: "cust-1", amount: 61,
-    postedPayments: [{ amount: 40 }] }), /remaining invoice balance of 60.00/)
-})
+  assert.throws(
+    () =>
+      validateInvoicePayment({
+        invoice,
+        companyId: "co-1",
+        customerId: "cust-1",
+        amount: 61,
+        postedPayments: [{ amount: 40 }],
+      }),
+    /remaining invoice balance of 60.00/,
+  );
+});
+
+test("invoice recovery accounts for posted return credits before accepting payment", () => {
+  const returned = { ...invoice, returns: [{ totalAmount: "30.00" }] };
+  assert.throws(
+    () =>
+      validateInvoicePayment({
+        invoice: returned,
+        companyId: "co-1",
+        customerId: "cust-1",
+        amount: 31,
+        postedPayments: [{ amount: 40 }],
+      }),
+    /remaining invoice balance of 30.00/,
+  );
+  assert.deepEqual(
+    validateInvoicePayment({
+      invoice: returned,
+      companyId: "co-1",
+      customerId: "cust-1",
+      amount: 30,
+      postedPayments: [{ amount: 40 }],
+    }),
+    { paid: 40, remaining: 30, newPaidAmount: 70 },
+  );
+});

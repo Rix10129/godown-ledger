@@ -1,7 +1,8 @@
-import type { Prisma, PrismaClient } from "@prisma/client"
-import { calculateCustomerBalance } from "@/lib/customer-ledger"
+import type { Transaction as LedgerTransaction } from "@/lib/db";
+import type { Prisma, PrismaClient } from "@prisma/client";
+import { calculateCustomerBalance } from "@/lib/customer-ledger";
 
-type Db = PrismaClient | Prisma.TransactionClient
+type Db = LedgerTransaction;
 
 /**
  * Fetches the same POSTED invoices/payments/returns every balance surface
@@ -13,14 +14,31 @@ type Db = PrismaClient | Prisma.TransactionClient
 export async function getCustomerOutstandingBalance(
   db: Db,
   companyId: string,
-  customerId: string
+  customerId: string,
 ): Promise<{ closingBalance: number } | null> {
   const [customer, invoices, payments, returns] = await Promise.all([
-    db.customer.findFirst({ where: { id: customerId, companyId }, select: { openingBalance: true } }),
-    db.saleInvoice.findMany({ where: { customerId, companyId, status: "POSTED" }, select: { netAmount: true } }),
-    db.customerPayment.findMany({ where: { customerId, companyId, status: "POSTED" }, select: { amount: true, discountAmount: true } }),
-    db.saleReturn.findMany({ where: { customerId, companyId, status: "POSTED" }, select: { totalAmount: true } }),
-  ])
-  if (!customer) return null
-  return calculateCustomerBalance({ openingBalance: customer.openingBalance, invoices, payments, returns })
+    db.customer.findFirst({
+      where: { id: customerId, companyId },
+      select: { openingBalance: true },
+    }),
+    db.saleInvoice.findMany({
+      where: { customerId, companyId, status: "POSTED" },
+      select: { netAmount: true },
+    }),
+    db.customerPayment.findMany({
+      where: { customerId, companyId, status: "POSTED" },
+      select: { amount: true, discountAmount: true },
+    }),
+    db.saleReturn.findMany({
+      where: { customerId, companyId, status: "POSTED" },
+      select: { totalAmount: true },
+    }),
+  ]);
+  if (!customer) return null;
+  return calculateCustomerBalance({
+    openingBalance: customer.openingBalance,
+    invoices,
+    payments,
+    returns,
+  });
 }

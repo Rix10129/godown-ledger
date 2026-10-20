@@ -1,3 +1,4 @@
+import { validQuantity } from "./quantities";
 type Numeric = number | string | { toString(): string };
 
 const number = (value: Numeric) => Number(value.toString());
@@ -25,7 +26,7 @@ export function assertStockReconciles(
     const moved = movements
       .filter((movement) => movement.batchId === batch.id)
       .reduce((total, movement) => total + movement.quantity, 0);
-    if (moved !== batch.quantity) {
+    if (Math.abs(moved - batch.quantity) > 0.0000001) {
       throw new Error(
         `Batch ${batch.id}: movements ${moved} != quantity ${batch.quantity}`,
       );
@@ -39,7 +40,10 @@ export function assertStockReconciles(
     const movementTotal = movements
       .filter((movement) => movement.productId === productId)
       .reduce((total, movement) => total + movement.quantity, 0);
-    if (batchTotal !== expected || movementTotal !== expected) {
+    if (
+      Math.abs(batchTotal - expected) > 0.0000001 ||
+      Math.abs(movementTotal - expected) > 0.0000001
+    ) {
       throw new Error(
         `Product ${productId}: batches ${batchTotal}, movements ${movementTotal}, total ${expected}`,
       );
@@ -78,8 +82,8 @@ export async function reserveBatchStock(
     quantity: number;
   },
 ) {
-  if (!Number.isSafeInteger(input.quantity) || input.quantity <= 0)
-    throw new Error("Quantity must be a positive integer");
+  if (!validQuantity(input.quantity))
+    throw new Error("Quantity must be positive with at most 3 decimal places");
   const result = await tx.productBatch.updateMany({
     where: {
       id: input.batchId,

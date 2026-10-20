@@ -1,19 +1,28 @@
-"use server"
+"use server";
 
-import { db } from "@/lib/db"
-import { UserRole } from "@prisma/client"
-import bcrypt from "bcryptjs"
-import { z } from "zod"
-import { randomUUID } from "crypto"
-import { sendAdminApprovalRequest } from "@/lib/email"
-import { ensureSystemAccounts } from "@/lib/accounting/system-accounts"
+import { db } from "@/lib/db";
+import { UserRole } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
+import { randomUUID } from "crypto";
+import { sendAdminApprovalRequest } from "@/lib/email";
+import { ensureSystemAccounts } from "@/lib/accounting/system-accounts";
 
-const APP_URL = (process.env.NEXTAUTH_URL ?? "http://localhost:3000").replace(/\/$/, "")
+const APP_URL = (process.env.NEXTAUTH_URL ?? "http://localhost:3000").replace(
+  /\/$/,
+  "",
+);
 
 const registerSchema = z
   .object({
-    companyName: z.string().min(2, "Company name must be at least 2 characters").max(100),
-    ownerName: z.string().min(2, "Your name must be at least 2 characters").max(100),
+    companyName: z
+      .string()
+      .min(2, "Company name must be at least 2 characters")
+      .max(100),
+    ownerName: z
+      .string()
+      .min(2, "Your name must be at least 2 characters")
+      .max(100),
     email: z.string().email("Invalid email address").toLowerCase(),
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
@@ -21,33 +30,39 @@ const registerSchema = z
   .refine((d) => d.password === d.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
-  })
+  });
 
-export type RegisterState = { error: string } | { success: true; email: string } | null
+export type RegisterState =
+  { error: string } | { success: true; email: string } | null;
 
 export async function registerCompany(
   _prev: RegisterState,
-  formData: FormData
+  formData: FormData,
 ): Promise<RegisterState> {
+  if (process.env.ALLOW_PUBLIC_REGISTRATION !== "true")
+    return {
+      error:
+        "Public registration is disabled. The company owner creates access.",
+    };
   const parsed = registerSchema.safeParse({
     companyName: formData.get("companyName"),
     ownerName: formData.get("ownerName"),
     email: formData.get("email"),
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
-  })
+  });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Validation error" }
+    return { error: parsed.error.issues[0]?.message ?? "Validation error" };
   }
 
-  const { companyName, ownerName, email, password } = parsed.data
+  const { companyName, ownerName, email, password } = parsed.data;
 
-  const existing = await db.user.findFirst({ where: { email } })
-  if (existing) return { error: "An account with this email already exists" }
+  const existing = await db.user.findFirst({ where: { email } });
+  if (existing) return { error: "An account with this email already exists" };
 
-  const hashed = await bcrypt.hash(password, 12)
-  const approvalToken = randomUUID()
+  const hashed = await bcrypt.hash(password, 12);
+  const approvalToken = randomUUID();
 
   try {
     await db.$transaction(async (tx) => {
@@ -57,8 +72,8 @@ export async function registerCompany(
           status: "PENDING",
           approvalToken,
         },
-      })
-      await ensureSystemAccounts(tx, company.id)
+      });
+      await ensureSystemAccounts(tx, company.id);
       await tx.user.create({
         data: {
           companyId: company.id,
@@ -68,14 +83,14 @@ export async function registerCompany(
           role: UserRole.OWNER,
           emailVerified: true,
         },
-      })
-    })
+      });
+    });
   } catch {
-    return { error: "Failed to create account. Please try again." }
+    return { error: "Failed to create account. Please try again." };
   }
 
   // Notify admin to approve or reject
-  const adminEmail = process.env.ADMIN_EMAIL
+  const adminEmail = process.env.ADMIN_EMAIL;
   if (adminEmail) {
     await sendAdminApprovalRequest({
       to: adminEmail,
@@ -90,11 +105,11 @@ export async function registerCompany(
         from: process.env.RESEND_FROM_EMAIL ?? "(not set)",
         apiKeySet: !!process.env.RESEND_API_KEY,
         error: String(err),
-      })
-    })
+      });
+    });
   } else {
-    console.warn("[register] ADMIN_EMAIL not set — approval email skipped")
+    console.warn("[register] ADMIN_EMAIL not set — approval email skipped");
   }
 
-  return { success: true, email }
+  return { success: true, email };
 }

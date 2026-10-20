@@ -1,145 +1,46 @@
 # Godown Ledger
 
-A full-stack web application for textile traders — buy yarn and cloth from mills, warehouse it in the godown, sell on udhar, and track recovery. Runs offline on a LAN server or online in the cloud — accessible from any desktop browser.
+A textile trading ledger for mills, godown stock, udhar bills, recovery, direct mill-to-buyer deals, accounts, returns and the evening note. One mill login opens a locked desk; each person uses a server-verified PIN and role. PostgreSQL is the shared source of truth.
 
-**Tech stack:** Next.js 16 · TypeScript · PostgreSQL · Prisma ORM · NextAuth.js · Tailwind CSS v4
+**Client deployment:** [Hostinger deployment guide](docs/HOSTINGER-DEPLOYMENT.md). **Office instructions:** [Client handover](docs/CLIENT-HANDOVER.md). **Recovery:** [Backup and restore](docs/BACKUP-RECOVERY.md). **Release scope:** [Launch plan](docs/LAUNCH-PLAN.md).
 
----
+## Development
 
-## Quick start (local development)
+Requires Node.js 22.12+ or 24 and PostgreSQL 15+. Use a separate local database.
 
-### Prerequisites
-
-- Node.js 20+
-- PostgreSQL 15+ running locally
-
-### 1. Clone and install
-
-```bash
-git clone <repo-url>
-cd Poultry-
-npm install           # downloads Prisma engine binaries automatically
-```
-
-### 2. Set up environment
-
-```bash
-cp .env.example .env.local
-# Edit .env.local — fill in DATABASE_URL and generate NEXTAUTH_SECRET:
-#   openssl rand -base64 32
-```
-
-### 3. Set up the database
-
-```bash
-# Create the schema via migrations
-npm run db:migrate
-
-# Seed with demo data (10 products, 3 suppliers, 5 customers, chart of accounts)
-npm run db:seed
-```
-
-### 4. Start the dev server
-
-```bash
+```sh
+npm ci
+cp .env.example .env
+# Fill DATABASE_URL and generate the independent secrets described in .env.example.
+npm run db:generate
+npm run db:deploy
 npm run dev
-# → http://localhost:3000
 ```
 
----
+For a clean company, set all five `INITIAL_*` environment variables securely and run `npm run client:setup`, then remove those variables. The command refuses a populated database belonging to another company. `npm run db:seed` is for a disposable demo only; it is never part of production startup.
 
-## Demo login credentials
+## Production
 
-| Email | Password | Role |
-|---|---|---|
-| owner@demo.com | demo1234 | OWNER |
-| cashier@demo.com | demo1234 | CASHIER |
-| salesman@demo.com | demo1234 | SALESMAN |
-
----
-
-## Useful commands
-
-```bash
-npm run db:studio     # Prisma Studio — visual database browser
-npm run db:reset      # Wipe and re-seed (dev only)
-npm run db:generate   # Regenerate Prisma client after schema changes
-npm run build         # Production build
-npm run start         # Start production server
+```sh
+npm ci
+npm run build
+npm start
 ```
 
----
+Build generates the Prisma client without connecting to or changing the database. `npm start` first runs tracked migrations and optional clean-company initialization, then starts Next.js. Set the exact HTTPS `NEXTAUTH_URL`, independent auth/backup/cron secrets, `TZ=Asia/Karachi`, and a private PostgreSQL URL. Supply `DIRECT_URL` for migrations when using a pooled application endpoint. Do not use MySQL, `db push`, migration baselining, demo credentials, or `npm run dev` for this deployment.
 
-## Project structure
+## Validation
 
-```
-prisma/
-  schema.prisma       # Full database schema (20+ models)
-  seed.ts             # Demo data (idempotent upserts)
-
-src/
-  app/
-    (auth)/login/     # Login page (no sidebar)
-    (dashboard)/      # All protected pages share the sidebar layout
-      page.tsx        # Dashboard home — live DB stats + roadmap
-      inventory/      # Module 2  — Products & batches
-      sales/          # Module 4  — Invoicing
-      purchases/      # Module 5  — Purchase orders
-      customers/      # Module 6  — Customer ledger
-      suppliers/      # Module 5  — Supplier directory
-      accounts/       # Module 7  — Double-entry accounting
-      reports/        # Module 8  — Reports
-      settings/       # Module 9  — Users & roles
-    api/auth/         # NextAuth route handler
-
-  components/
-    layout/           # Sidebar, Topbar
-    providers.tsx     # SessionProvider wrapper
-
-  lib/
-    db.ts             # Prisma client singleton
-    auth.ts           # NextAuth credentials config
-    utils.ts          # cn(), formatCurrency, formatDate, daysUntilExpiry
-
-  types/
-    index.ts          # Shared TS types
-    next-auth.d.ts    # NextAuth session augmentation (role, companyId)
+```sh
+npm run format:check
+npm run lint
+npm run typecheck
+npm run test:unit
+# Against an isolated migrated test database only:
+RUN_DATABASE_CONCURRENCY_TESTS=1 npm run test:integration
+npm run build
 ```
 
----
+The integration suite includes actual PostgreSQL stock reservations, financial postings, invoice corrections, returns, direct-deal reversal and concurrent tills. See the release validation record for actual outcomes; commands printed here are not proof they passed on a particular deployment.
 
-## Key design decisions
-
-- **FEFO enforced, expiry optional**: `SaleInvoiceItem.batchId` is non-nullable — every sale line references a specific lot. The API picks the earliest-`expiryDate` batch with stock; batches with no expiry (yarn/cloth doesn't expire) fall back to FIFO by received date.
-- **Money in `Decimal(12,2)`**: No floating-point arithmetic anywhere near money.
-- **Double-entry accounting**: Every financial event (sale, payment) auto-creates a balanced `JournalEntry` with `JournalLine` rows inside a database transaction.
-- **Multi-tenant**: Every record carries `companyId`. Isolating a new business means creating a `Company` + `OWNER` user — no schema changes.
-- **Audit trail**: `AuditLog` records who changed what with before/after JSON values.
-
----
-
-## Module delivery plan
-
-| # | Module | Status |
-|---|---|---|
-| 1 | Project Setup, schema, seed, auth, layout | ✅ Done |
-| 2 | Godown & Stock (products, lots, movements) | ✅ Done |
-| 3 | Low-Stock Alerts | ✅ Done |
-| 4 | Udhar Sales & Invoicing | ✅ Done |
-| 5 | Purchases & Mills | ✅ Done |
-| 6 | Buyers & Recovery | ✅ Done |
-| 7 | Accounts (double-entry, day book, P&L) | ✅ Done |
-| 8 | Reports & Dashboard | ✅ Done |
-| 9 | Users, Roles & Audit Log | ✅ Done |
-
----
-
-## Deployment
-
-Standard Next.js app — any Node.js host works (VPS, Railway, Render, Vercel + Neon, etc.).
-
-1. Set `DATABASE_URL` to your production PostgreSQL URL.
-2. Set `NEXTAUTH_SECRET` (strong random string).
-3. Set `NEXTAUTH_URL` to your public domain.
-4. `npm run db:migrate` on first deploy.
-5. `npm start` (or let the platform handle it).
+Data remains server-side; private pages are not service-worker cached. The cloud client workflow requires a connection. Read screens refresh automatically about every five seconds while visible, pausing during unfinished entries. Provider keys, schedules, DNS, TLS and real-host acceptance tests are deployment prerequisites rather than files installed by `npm`.

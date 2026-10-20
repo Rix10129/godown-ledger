@@ -1,55 +1,83 @@
-"use server"
+"use server";
 
-import { db } from "@/lib/db"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
-import { productSchema, batchSchema, batchPriceUpdateSchema } from "@/lib/validations/inventory"
-import { MovementType, UnitType } from "@prisma/client"
-import { postStockAdjustment } from "@/lib/accounting/posting-service"
+import { assertPermission } from "@/lib/authorization";
 
-type ActionState = { error: string } | null
-type InventoryTx = Pick<typeof db, "product" | "productBatch" | "stockMovement">
+import { db } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import {
+  productSchema,
+  batchSchema,
+  batchPriceUpdateSchema,
+} from "@/lib/validations/inventory";
+import { MovementType, UnitType } from "@prisma/client";
+import { postStockAdjustment } from "@/lib/accounting/posting-service";
+
+type ActionState = { error: string } | null;
+type InventoryTx = import("@/lib/db").Transaction;
 
 async function getCompanyId() {
-  const session = await getServerSession(authOptions)
-  const companyId = session?.user?.companyId
-  if (!companyId) throw new Error("Unauthorized")
-  return companyId
+  const session = await getServerSession(authOptions);
+  const companyId = session?.user?.companyId;
+  if (!companyId) throw new Error("Unauthorized");
+  return companyId;
 }
 
 function normalizeFormData(formData: FormData) {
-  const raw: Record<string, unknown> = {}
+  const raw: Record<string, unknown> = {};
   for (const [k, v] of formData.entries()) {
-    raw[k] = v === "" ? undefined : v
+    raw[k] = v === "" ? undefined : v;
   }
-  return raw
+  return raw;
 }
 
 function parseProductForm(formData: FormData) {
-  const parsed = productSchema.safeParse(normalizeFormData(formData))
+  const parsed = productSchema.safeParse(normalizeFormData(formData));
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Validation error")
+    throw new Error(parsed.error.issues[0]?.message ?? "Validation error");
   }
 
-  return parsed.data
+  return parsed.data;
 }
 
 // ── Products ──────────────────────────────────────────────────────────────────
 
 export async function createProduct(
   prevState: ActionState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
-  let companyId: string
-  try { companyId = await getCompanyId() } catch { return { error: "Not authenticated" } }
+  await assertPermission("MASTER_CREATE");
+  let companyId: string;
+  try {
+    companyId = await getCompanyId();
+  } catch {
+    return { error: "Not authenticated" };
+  }
 
-  let parsed: ReturnType<typeof parseProductForm>
-  try { parsed = parseProductForm(formData) }
-  catch (e: unknown) { return { error: e instanceof Error ? e.message : "Validation error" } }
+  let parsed: ReturnType<typeof parseProductForm>;
+  try {
+    parsed = parseProductForm(formData);
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : "Validation error" };
+  }
 
-  const { unit, subUnit, ...rest } = parsed
+  if (
+    parsed.supplierId &&
+    !(await db.supplier.findFirst({
+      where: { id: parsed.supplierId, companyId },
+    }))
+  )
+    return { error: "Mill not found" };
+  if (
+    parsed.categoryId &&
+    !(await db.category.findFirst({
+      where: { id: parsed.categoryId, companyId },
+    }))
+  )
+    return { error: "Category not found" };
+  const { unit, subUnit, ...rest } = parsed;
 
   try {
     await db.product.create({
@@ -59,28 +87,52 @@ export async function createProduct(
         unit: unit as UnitType,
         subUnit: subUnit ? (subUnit as UnitType) : undefined,
       },
-    })
+    });
   } catch (e: unknown) {
-    return { error: e instanceof Error ? e.message : "Failed to create product" }
+    return {
+      error: e instanceof Error ? e.message : "Failed to create product",
+    };
   }
 
-  revalidatePath("/inventory")
-  redirect("/inventory")
+  revalidatePath("/inventory");
+  redirect("/inventory");
 }
 
 export async function updateProduct(
   id: string,
   prevState: ActionState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
-  let companyId: string
-  try { companyId = await getCompanyId() } catch { return { error: "Not authenticated" } }
+  await assertPermission("MASTER_EDIT");
+  let companyId: string;
+  try {
+    companyId = await getCompanyId();
+  } catch {
+    return { error: "Not authenticated" };
+  }
 
-  let parsed: ReturnType<typeof parseProductForm>
-  try { parsed = parseProductForm(formData) }
-  catch (e: unknown) { return { error: e instanceof Error ? e.message : "Validation error" } }
+  let parsed: ReturnType<typeof parseProductForm>;
+  try {
+    parsed = parseProductForm(formData);
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : "Validation error" };
+  }
 
-  const { unit, subUnit, ...rest } = parsed
+  if (
+    parsed.supplierId &&
+    !(await db.supplier.findFirst({
+      where: { id: parsed.supplierId, companyId },
+    }))
+  )
+    return { error: "Mill not found" };
+  if (
+    parsed.categoryId &&
+    !(await db.category.findFirst({
+      where: { id: parsed.categoryId, companyId },
+    }))
+  )
+    return { error: "Category not found" };
+  const { unit, subUnit, ...rest } = parsed;
 
   try {
     await db.product.updateMany({
@@ -90,24 +142,27 @@ export async function updateProduct(
         unit: unit as UnitType,
         subUnit: subUnit ? (subUnit as UnitType) : null,
       },
-    })
+    });
   } catch (e: unknown) {
-    return { error: e instanceof Error ? e.message : "Failed to update product" }
+    return {
+      error: e instanceof Error ? e.message : "Failed to update product",
+    };
   }
 
-  revalidatePath("/inventory")
-  revalidatePath(`/inventory/${id}`)
-  redirect(`/inventory/${id}`)
+  revalidatePath("/inventory");
+  revalidatePath(`/inventory/${id}`);
+  redirect(`/inventory/${id}`);
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  const companyId = await getCompanyId()
+  await assertPermission("MASTER_DELETE");
+  const companyId = await getCompanyId();
   await db.product.updateMany({
     where: { id, companyId },
     data: { isActive: false },
-  })
-  revalidatePath("/inventory")
-  redirect("/inventory")
+  });
+  revalidatePath("/inventory");
+  redirect("/inventory");
 }
 
 // ── Batches ───────────────────────────────────────────────────────────────────
@@ -115,27 +170,44 @@ export async function deleteProduct(id: string): Promise<void> {
 export async function createBatch(
   productId: string,
   prevState: ActionState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
-  let companyId: string
-  try { companyId = await getCompanyId() } catch { return { error: "Not authenticated" } }
-
-  // Verify the product belongs to this company
-  const product = await db.product.findFirst({ where: { id: productId, companyId } })
-  if (!product) return { error: "Product not found" }
-
-  const parsed = batchSchema.safeParse(normalizeFormData(formData))
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Validation error" }
+  await assertPermission("OPENING_BALANCE_CORRECT");
+  let companyId: string;
+  try {
+    companyId = await getCompanyId();
+  } catch {
+    return { error: "Not authenticated" };
   }
 
-  const { batchNumber, manufactureDate, expiryDate, purchasePrice, salePrice, quantity } = parsed.data
+  // Verify the product belongs to this company
+  const product = await db.product.findFirst({
+    where: { id: productId, companyId },
+  });
+  if (!product) return { error: "Product not found" };
+
+  const parsed = batchSchema.safeParse(normalizeFormData(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Validation error" };
+  }
+
+  const {
+    batchNumber,
+    manufactureDate,
+    expiryDate,
+    purchasePrice,
+    salePrice,
+    quantity,
+  } = parsed.data;
 
   // Check for duplicate batch number on same product
   const existing = await db.productBatch.findFirst({
     where: { batchNumber, productId, companyId },
-  })
-  if (existing) return { error: `Batch number "${batchNumber}" already exists for this product` }
+  });
+  if (existing)
+    return {
+      error: `Batch number "${batchNumber}" already exists for this product`,
+    };
 
   try {
     await db.$transaction(async (tx: InventoryTx) => {
@@ -144,16 +216,16 @@ export async function createBatch(
           companyId,
           productId,
           batchNumber,
-          expiryDate: new Date(expiryDate),
+          expiryDate: expiryDate ? new Date(expiryDate) : null,
           manufactureDate: manufactureDate ? new Date(manufactureDate) : null,
           purchasePrice,
           salePrice,
           quantity,
           initialQuantity: quantity,
         },
-      })
+      });
 
-      await tx.stockMovement.create({
+      const movement = await tx.stockMovement.create({
         data: {
           companyId,
           productId,
@@ -161,64 +233,95 @@ export async function createBatch(
           type: MovementType.PURCHASE,
           quantity,
           reference: `BATCH:${batchNumber}`,
-          notes: "Batch received into inventory",
+          notes: "Opening stock entered",
         },
-      })
-    })
+      });
+      await postStockAdjustment(tx, {
+        companyId,
+        sourceId: movement.id,
+        number: `OPEN-${batchNumber}`,
+        date: movement.createdAt,
+        amount: new (await import("decimal.js")).default(quantity)
+          .times(purchasePrice)
+          .toFixed(2),
+        opening: true,
+        increase: true,
+      });
+    });
   } catch (e: unknown) {
-    return { error: e instanceof Error ? e.message : "Failed to add batch" }
+    return { error: e instanceof Error ? e.message : "Failed to add batch" };
   }
 
-  revalidatePath(`/inventory/${productId}`)
-  revalidatePath("/inventory")
-  return null
+  revalidatePath(`/inventory/${productId}`);
+  revalidatePath("/inventory");
+  return null;
 }
 
 export async function updateBatchPrice(
   productId: string,
   batchId: string,
   prevState: ActionState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
-  let companyId: string
-  try { companyId = await getCompanyId() } catch { return { error: "Not authenticated" } }
-
-  const parsed = batchPriceUpdateSchema.safeParse(normalizeFormData(formData))
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Validation error" }
+  await assertPermission("MASTER_EDIT");
+  let companyId: string;
+  try {
+    companyId = await getCompanyId();
+  } catch {
+    return { error: "Not authenticated" };
   }
 
-  const batch = await db.productBatch.findFirst({ where: { id: batchId, productId, companyId } })
-  if (!batch) return { error: "Batch not found" }
+  const parsed = batchPriceUpdateSchema.safeParse(normalizeFormData(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Validation error" };
+  }
+
+  const batch = await db.productBatch.findFirst({
+    where: { id: batchId, productId, companyId },
+  });
+  if (!batch) return { error: "Batch not found" };
+
+  if (Number(batch.purchasePrice) !== parsed.data.purchasePrice)
+    return {
+      error:
+        "A received lot’s cost is fixed for accounting. Reverse and re-enter the receipt to correct its cost.",
+    };
 
   await db.productBatch.update({
     where: { id: batchId },
-    data: { purchasePrice: parsed.data.purchasePrice, salePrice: parsed.data.salePrice },
-  })
+    data: {
+      purchasePrice: parsed.data.purchasePrice,
+      salePrice: parsed.data.salePrice,
+    },
+  });
 
-  revalidatePath(`/inventory/${productId}`)
-  revalidatePath("/inventory")
-  return null
+  revalidatePath(`/inventory/${productId}`);
+  revalidatePath("/inventory");
+  return null;
 }
 
 export async function adjustStock(
   productId: string,
   batchId: string,
   delta: number,
-  notes: string
+  notes: string,
 ): Promise<void> {
-  const companyId = await getCompanyId()
+  await assertPermission("STOCK_ADJUST");
+  const companyId = await getCompanyId();
 
   const batch = await db.productBatch.findFirst({
     where: { id: batchId, companyId },
-  })
-  if (!batch) throw new Error("Batch not found")
+  });
+  if (!batch) throw new Error("Batch not found");
 
-  const newQty = batch.quantity + delta
-  if (newQty < 0) throw new Error("Adjustment would make stock negative")
+  const newQty = batch.quantity + delta;
+  if (newQty < 0) throw new Error("Adjustment would make stock negative");
 
-  await db.$transaction(async tx => {
-    await tx.productBatch.update({ where: { id: batchId }, data: { quantity: newQty } })
+  await db.$transaction(async (tx) => {
+    await tx.productBatch.update({
+      where: { id: batchId },
+      data: { quantity: newQty },
+    });
     const movement = await tx.stockMovement.create({
       data: {
         companyId,
@@ -228,10 +331,18 @@ export async function adjustStock(
         quantity: delta,
         notes,
       },
-    })
-    const unitCost = Number(batch.purchasePrice)
-    await postStockAdjustment(tx, { companyId, sourceId: movement.id, number: movement.id, date: movement.createdAt, amount: Math.abs(delta) * unitCost, increase: delta > 0, description: notes || "Stock adjustment" })
-  })
+    });
+    const unitCost = Number(batch.purchasePrice);
+    await postStockAdjustment(tx, {
+      companyId,
+      sourceId: movement.id,
+      number: movement.id,
+      date: movement.createdAt,
+      amount: Math.abs(delta) * unitCost,
+      increase: delta > 0,
+      description: notes || "Stock adjustment",
+    });
+  });
 
-  revalidatePath(`/inventory/${productId}`)
+  revalidatePath(`/inventory/${productId}`);
 }

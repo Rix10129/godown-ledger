@@ -1,0 +1,17 @@
+GODOWN LEDGER — TEXTILE CLOUD RELEASE
+
+Start with docs/HOSTINGER-DEPLOYMENT.md.
+This is a Next.js / Node.js 22 / PostgreSQL application.
+Uploading the ZIP into PHP public_html is not sufficient.
+
+The office uses the final HTTPS website in its browsers. No Node.js installation
+is needed on the office computers. All computers share the hosted database.
+The mill email/password opens the PIN screen. Each person uses their own PIN.
+Leave the desk when finished. Owner PIN opens all work.
+
+Use .env.example for variable names; never ship real secrets to office staff.
+Do not run demo seed, database reset, or db push against the live company.
+
+Client instructions: docs/CLIENT-HANDOVER.md or public/user-guide.html.
+Checks and limitations: docs/RELEASE-VALIDATION.md.
+Backup recovery: docs/BACKUP-RECOVERY.md.

@@ -1,17 +1,25 @@
-"use client"
+"use client";
 
-import { useActionState, useState } from "react"
-import { createStockAdjustment } from "@/app/(dashboard)/inventory/adjustments/actions"
-import { Button } from "@/components/ui/button"
+import { useActionState, useState } from "react";
+import { createStockAdjustment } from "@/app/(dashboard)/inventory/adjustments/actions";
+import { Button } from "@/components/ui/button";
 
-type Batch = { id: string; batchNumber: string; quantity: number; expiryDate: Date | null }
-type Product = { id: string; name: string; unit: string; batches: Batch[] }
+type Batch = {
+  id: string;
+  batchNumber: string;
+  quantity: number;
+  expiryDate: Date | null;
+};
+type Product = { id: string; name: string; unit: string; batches: Batch[] };
 
 export function StockAdjustmentForm({ products }: { products: Product[] }) {
-  const [state, formAction, pending] = useActionState(createStockAdjustment, null)
-  const [selectedProductId, setSelectedProductId] = useState("")
+  const [state, formAction, pending] = useActionState(
+    createStockAdjustment,
+    null,
+  );
+  const [selectedProductId, setSelectedProductId] = useState("");
 
-  const selectedProduct = products.find((p) => p.id === selectedProductId)
+  const selectedProduct = products.find((p) => p.id === selectedProductId);
 
   return (
     <form action={formAction} className="space-y-5">
@@ -34,7 +42,9 @@ export function StockAdjustmentForm({ products }: { products: Product[] }) {
         >
           <option value="">Select product…</option>
           {products.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
           ))}
         </select>
       </div>
@@ -52,8 +62,11 @@ export function StockAdjustmentForm({ products }: { products: Product[] }) {
             <option value="">Select batch…</option>
             {selectedProduct.batches.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.batchNumber} — {b.quantity} {selectedProduct.unit.toLowerCase()} in stock
-                {b.expiryDate ? ` (Exp: ${new Date(b.expiryDate).toLocaleDateString("en-GB")})` : ""}
+                {b.batchNumber} — {b.quantity}{" "}
+                {selectedProduct.unit.toLowerCase()} in stock
+                {b.expiryDate
+                  ? ` (Exp: ${new Date(b.expiryDate).toLocaleDateString("en-GB")})`
+                  : ""}
               </option>
             ))}
           </select>
@@ -70,7 +83,9 @@ export function StockAdjustmentForm({ products }: { products: Product[] }) {
             required
             className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="subtract">Remove from stock (damage / write-off)</option>
+            <option value="subtract">
+              Remove from stock (damage / write-off)
+            </option>
             <option value="add">Add to stock (count correction)</option>
           </select>
         </div>
@@ -82,7 +97,8 @@ export function StockAdjustmentForm({ products }: { products: Product[] }) {
           <input
             name="quantity"
             type="number"
-            min={1}
+            min={0.001}
+            step="0.001"
             required
             placeholder="0"
             className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -91,7 +107,9 @@ export function StockAdjustmentForm({ products }: { products: Product[] }) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">Reason / Notes</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+          Reason / Notes
+        </label>
         <input
           name="notes"
           placeholder="e.g. Expired stock destroyed, physical count correction…"
@@ -105,5 +123,5 @@ export function StockAdjustmentForm({ products }: { products: Product[] }) {
         </Button>
       </div>
     </form>
-  )
+  );
 }

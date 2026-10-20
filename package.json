@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "(prisma migrate resolve --applied 20260726000000_init || true) && prisma migrate deploy && PRISMA_CLIENT_ENGINE_TYPE=wasm prisma generate && PRISMA_CLIENT_ENGINE_TYPE=wasm next build",
+    "build": "npm run db:generate && next build",
     "start": "next start -H 0.0.0.0",
     "lint": "eslint",
     "test": "tsx --test $(find src -name '*.test.ts' -print)",
@@ -17,7 +17,12 @@
     "format:check": "prettier --check package.json .github src/lib/inventory-reconciliation.ts src/lib/inventory-reconciliation.test.ts src/lib/accounting/business-scenarios.integration.test.ts",
     "typecheck": "tsc --noEmit",
     "test:unit": "tsx --test $(find src -name \"*.test.ts\" ! -name \"*.integration.test.ts\" -print)",
-    "test:integration": "tsx --test --experimental-test-module-mocks $(find src -name \"*.integration.test.ts\" -print)"
+    "test:integration": "tsx --test --experimental-test-module-mocks $(find src -name \"*.integration.test.ts\" -print)",
+    "db:deploy": "prisma migrate deploy",
+    "start:deploy": "npm start",
+    "client:setup": "node scripts/create-company.mjs",
+    "prestart": "npm run db:deploy && node scripts/create-company.mjs --if-configured",
+    "backup:restore": "tsx scripts/restore-company.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -25,8 +30,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1076.0",
     "@hookform/resolvers": "^5.4.0",
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
     "@radix-ui/react-avatar": "^1.2.0",
     "@radix-ui/react-dialog": "^1.1.17",
     "@radix-ui/react-dropdown-menu": "^2.1.18",
@@ -44,11 +49,11 @@
     "decimal.js": "^10.6.0",
     "exceljs": "^4.4.0",
     "lucide-react": "^1.21.0",
-    "next": "16.2.9",
-    "next-auth": "^4.24.14",
+    "next": "16.4.2",
+    "next-auth": "4.24.15",
     "pdf-lib": "^1.17.1",
     "pg": "^8.22.0",
-    "prisma": "^7.8.0",
+    "prisma": "7.10.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.80.0",
@@ -64,10 +69,18 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.9",
+    "eslint-config-next": "16.4.2",
     "prettier": "^3.5.3",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22.12 <25"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
   }
 }

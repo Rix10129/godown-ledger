@@ -2,9 +2,9 @@ name: Quality
 
 on:
   push:
-    branches: [Production]
+    branches: [main, Production]
   pull_request:
-    branches: [Production]
+    branches: [main, Production]
 
 permissions:
   contents: read
@@ -26,6 +26,7 @@ jobs:
       - run: npm ci
       - run: npm run format:check
       - run: npm run lint
+      - run: npm run db:generate
       - run: npm run typecheck
 
   unit-tests:
@@ -48,17 +49,17 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_USER: poultry
-          POSTGRES_PASSWORD: poultry
-          POSTGRES_DB: poultry_test
+          POSTGRES_USER: godown
+          POSTGRES_PASSWORD: ci_test_only
+          POSTGRES_DB: godown_test
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U poultry -d poultry_test"
+          --health-cmd "pg_isready -U godown -d godown_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgresql://poultry:poultry@localhost:5432/poultry_test
+      DATABASE_URL: postgresql://godown:ci_test_only@localhost:5432/godown_test
       RUN_DATABASE_CONCURRENCY_TESTS: "1"
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +68,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx prisma db push --skip-generate
+      - run: npm run db:deploy
       - run: npm run db:generate
       - run: npm run test:integration
 

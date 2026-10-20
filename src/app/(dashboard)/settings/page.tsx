@@ -1,20 +1,20 @@
-import { db } from "@/lib/db"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { redirect } from "next/navigation"
-import { CompanySettingsForm } from "@/components/settings/company-settings-form"
-import { ReportDownloadButton } from "@/components/settings/report-download-button"
-import { ImportBackupForm } from "@/components/settings/import-backup-form"
-import Link from "next/link"
-import { Download } from "lucide-react"
+import { db } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { CompanySettingsForm } from "@/components/settings/company-settings-form";
+import { ReportDownloadButton } from "@/components/settings/report-download-button";
+import { ImportBackupForm } from "@/components/settings/import-backup-form";
+import Link from "next/link";
+import { Download } from "lucide-react";
 
-export const dynamic = "force-dynamic"
-export const metadata = { title: "Settings" }
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/login")
-  const actor = session.user as any
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+  const actor = session.user as any;
 
   const company = await db.company.findUnique({
     where: { id: actor.companyId },
@@ -28,11 +28,11 @@ export default async function SettingsPage() {
       currency: true,
       logoUrl: true,
     },
-  })
+  });
 
-  if (!company) redirect("/login")
+  if (!company) redirect("/login");
 
-  const isOwner = actor.role === "OWNER"
+  const isOwner = actor.role === "OWNER";
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -59,14 +59,18 @@ export default async function SettingsPage() {
                 ["Address", company.address ?? "—"],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <p className="text-xs font-medium text-slate-500 mb-0.5">{label}</p>
+                  <p className="text-xs font-medium text-slate-500 mb-0.5">
+                    {label}
+                  </p>
                   <p className="text-slate-800">{value}</p>
                 </div>
               ))}
             </div>
             {company.logoUrl && (
               <div className="mt-5">
-                <p className="text-xs font-medium text-slate-500 mb-1.5">Logo</p>
+                <p className="text-xs font-medium text-slate-500 mb-1.5">
+                  Logo
+                </p>
                 <img
                   src={company.logoUrl}
                   alt="Company logo"
@@ -83,10 +87,12 @@ export default async function SettingsPage() {
 
       {/* Excel Report Download — available to all roles */}
       <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h2 className="text-base font-semibold text-slate-900 mb-1">Download Business Report</h2>
+        <h2 className="text-base font-semibold text-slate-900 mb-1">
+          Download Business Report
+        </h2>
         <p className="text-sm text-slate-500 mb-4">
-          Export a complete Excel report with Sales, Purchases, Inventory, and Receivables.
-          Automatically emailed to the owner every 15 days.
+          Export a complete Excel report with Sales, Purchases, Inventory, and
+          Receivables. Automatically emailed to the owner every 15 days.
         </p>
         <div className="flex flex-wrap gap-3">
           <ReportDownloadButton days={15} label="Last 15 Days" />
@@ -99,32 +105,42 @@ export default async function SettingsPage() {
       {isOwner && (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-6">
           <div>
-            <h2 className="text-base font-semibold text-slate-900 mb-1">Export All Data</h2>
+            <h2 className="text-base font-semibold text-slate-900 mb-1">
+              Export All Data
+            </h2>
             <p className="text-sm text-slate-500 mb-4">
-              Download a full JSON backup of all your company data — customers, suppliers, products,
-              invoices, purchases, and expenses. Save this file somewhere safe (email it to yourself,
-              Google Drive, USB drive). You can use it to restore your data if anything is ever lost.
+              Download a full JSON backup of all your company data — customers,
+              suppliers, products, invoices, purchases, and expenses. Save this
+              file somewhere safe (email it to yourself, Google Drive, USB
+              drive). You can use it to restore your data if anything is ever
+              lost.
             </p>
             <Link
               href="/api/export"
               className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 transition-colors"
             >
               <Download className="h-4 w-4" />
-              Export JSON Backup
+              Download encrypted office backup
             </Link>
           </div>
 
           <div className="border-t border-slate-100 pt-5">
-            <h2 className="text-base font-semibold text-slate-900 mb-1">Restore from Backup</h2>
+            <h2 className="text-base font-semibold text-slate-900 mb-1">
+              Validate a backup for recovery
+            </h2>
             <p className="text-sm text-slate-500 mb-4">
-              Upload a previously exported JSON backup file to restore your customers, suppliers,
-              products, and current stock. Every row is validated and previewed before one atomic
-              transaction. Duplicate files and supplier/batch combinations require explicit approval.
+              Upload an encrypted office backup to verify its integrity. This
+              validation does not overwrite the live book. Recovery uses a
+              separate empty database; see docs/BACKUP-RECOVERY.md. This
+              includes your customers, suppliers, products, and current stock.
+              Every row is validated and previewed before one atomic
+              transaction. Duplicate files and supplier/batch combinations
+              require explicit approval.
             </p>
             <ImportBackupForm />
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }

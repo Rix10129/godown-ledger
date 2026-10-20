@@ -1,45 +1,62 @@
-"use client"
-
-import { SessionProvider } from "next-auth/react"
-import type { Session } from "next-auth"
-import { useEffect } from "react"
-import { kvSet } from "@/lib/offline-db"
-
+"use client";
+import { SessionProvider, useSession } from "next-auth/react";
+import type { Session } from "next-auth";
+import { useEffect } from "react";
 export function Providers({
   children,
   session,
 }: {
-  children: React.ReactNode
-  session: Session | null
+  children: React.ReactNode;
+  session: Session | null;
 }) {
   useEffect(() => {
-    // Register service worker
-    if ("serviceWorker" in navigator) {
+    if ("serviceWorker" in navigator)
       navigator.serviceWorker
         .register("/sw.js", { scope: "/" })
-        .catch((err) => console.warn("[SW] registration failed:", err))
-    }
+        .catch(() => null);
+    const lock = (event: StorageEvent) => {
+      if (event.key === "godown-desk-lock") window.location.replace("/desk");
+    };
+    window.addEventListener("storage", lock);
+    const restore = (event: PageTransitionEvent) => {
+      if (event.persisted) window.location.reload();
+    };
+    window.addEventListener("pageshow", restore);
+    return () => {
+      window.removeEventListener("pageshow", restore);
+      window.removeEventListener("storage", lock);
+    };
+  }, []);
+  return (
+    <SessionProvider
+      session={session}
+      refetchOnWindowFocus
+      refetchInterval={60}
+    >
+      <SessionWatcher />
+      {children}
+    </SessionProvider>
+  );
+}
 
-    // Background-sync customers + products into IndexedDB whenever online.
-    // This gives the offline invoice form data to work with even if the
-    // service worker hasn't cached /sales/new yet.
-    function syncOfflineData() {
-      if (!navigator.onLine) return
-      fetch("/api/offline-data", { credentials: "same-origin" })
-        .then((res) => res.ok ? res.json() : null)
-        .then((data) => {
-          if (!data) return
-          kvSet("customers", data.customers).catch(() => null)
-          kvSet("products", data.products).catch(() => null)
-        })
-        .catch(() => null) // never throw — this is background work
-    }
-
-    // Run on mount and whenever the browser comes back online
-    syncOfflineData()
-    window.addEventListener("online", syncOfflineData)
-    return () => window.removeEventListener("online", syncOfflineData)
-  }, [])
-
-  return <SessionProvider session={session}>{children}</SessionProvider>
+function SessionWatcher() {
+  const { data, status } = useSession();
+  useEffect(() => {
+    const pathname = window.location.pathname;
+    const authPage = [
+      "/login",
+      "/desk",
+      "/register",
+      "/forgot-password",
+      "/reset-password",
+      "/verify-email",
+    ].includes(pathname);
+    if (
+      !authPage &&
+      status !== "loading" &&
+      (!data?.user || data?.desk?.locked)
+    )
+      window.location.replace(data?.desk ? "/desk" : "/login");
+  }, [data, status]);
+  return null;
 }

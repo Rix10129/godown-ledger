@@ -1,59 +1,76 @@
-"use server"
+"use server";
 
-import { db } from "@/lib/db"
-import { allocateDocumentNumber } from "@/lib/document-number"
-import { getActiveSession } from "@/lib/session"
-import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
-import { QuotationStatus } from "@prisma/client"
-import { lineBase, calculateDocumentTotals } from "@/lib/invoice-math"
+import { assertPermission } from "@/lib/authorization";
 
-type ActionState = { error: string } | null
+import { db } from "@/lib/db";
+import { allocateDocumentNumber } from "@/lib/document-number";
+import { getActiveSession } from "@/lib/session";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { QuotationStatus } from "@prisma/client";
+import { lineBase, calculateDocumentTotals } from "@/lib/invoice-math";
+
+type ActionState = { error: string } | null;
 
 type LineInput = {
-  productId: string
-  quantity: number
-  unit: string
-  salePrice: number
-  discount: number
-  taxRate: number
-}
+  productId: string;
+  quantity: number;
+  unit: string;
+  salePrice: number;
+  discount: number;
+  taxRate: number;
+};
 
 export async function createQuotation(
   _prev: ActionState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
-  const session = await getActiveSession()
-  const user = session?.user as any
-  if (!user?.companyId) return { error: "Not authenticated" }
+  await assertPermission("SALE_CREATE");
+  const session = await getActiveSession();
+  const user = session?.user as any;
+  if (!user?.companyId) return { error: "Not authenticated" };
 
-  const companyId = user.companyId as string
-  const userId = user.id as string
+  const companyId = user.companyId as string;
+  const userId = user.id as string;
 
-  const customerId = (formData.get("customerId") as string) || null
-  const quoteDate = (formData.get("quoteDate") as string) || new Date().toISOString()
-  const validUntil = (formData.get("validUntil") as string) || null
-  const discountAmount = Math.max(0, parseFloat(formData.get("discountAmount") as string) || 0)
-  const notes = (formData.get("notes") as string) || null
-  const linesJson = formData.get("linesJson") as string
+  const customerId = (formData.get("customerId") as string) || null;
+  const quoteDate =
+    (formData.get("quoteDate") as string) || new Date().toISOString();
+  const validUntil = (formData.get("validUntil") as string) || null;
+  const discountAmount = Math.max(
+    0,
+    parseFloat(formData.get("discountAmount") as string) || 0,
+  );
+  const notes = (formData.get("notes") as string) || null;
+  const linesJson = formData.get("linesJson") as string;
 
-  if (!linesJson) return { error: "No items provided" }
-  let lines: LineInput[]
+  if (!linesJson) return { error: "No items provided" };
+  let lines: LineInput[];
   try {
-    lines = JSON.parse(linesJson)
+    lines = JSON.parse(linesJson);
   } catch {
-    return { error: "Invalid items data" }
+    return { error: "Invalid items data" };
   }
-  if (!Array.isArray(lines) || lines.length === 0) return { error: "Add at least one item" }
+  if (!Array.isArray(lines) || lines.length === 0)
+    return { error: "Add at least one item" };
 
-  let quoteId = ""
+  let quoteId = "";
 
   try {
     await db.$transaction(async (tx) => {
-      const quoteDateValue = new Date(quoteDate)
-      const quoteNumber = await allocateDocumentNumber(tx, companyId, "QUOTATION", quoteDateValue)
+      const quoteDateValue = new Date(quoteDate);
+      const quoteNumber = await allocateDocumentNumber(
+        tx,
+        companyId,
+        "QUOTATION",
+        quoteDateValue,
+      );
 
-      const { totalAmount, taxAmount, netAmount } = calculateDocumentTotals(lines, l => l.salePrice, discountAmount)
+      const { totalAmount, taxAmount, netAmount } = calculateDocumentTotals(
+        lines,
+        (l) => l.salePrice,
+        discountAmount,
+      );
 
       const quote = await tx.quotation.create({
         data: {
@@ -70,12 +87,16 @@ export async function createQuotation(
           notes,
           status: "DRAFT",
         },
-      })
+      });
 
-      quoteId = quote.id
+      quoteId = quote.id;
 
       for (const line of lines) {
-        const lineTotal = lineBase(line.quantity, line.salePrice, line.discount)
+        const lineTotal = lineBase(
+          line.quantity,
+          line.salePrice,
+          line.discount,
+        );
         await tx.quotationItem.create({
           data: {
             quotationId: quote.id,
@@ -87,85 +108,88 @@ export async function createQuotation(
             taxRate: line.taxRate,
             totalAmount: lineTotal,
           },
-        })
+        });
       }
-    })
+    });
   } catch (e: any) {
-    return { error: e?.message ?? "Failed to create quotation" }
+    return { error: e?.message ?? "Failed to create quotation" };
   }
 
-  revalidatePath("/quotations")
-  redirect(`/quotations/${quoteId}`)
+  revalidatePath("/quotations");
+  redirect(`/quotations/${quoteId}`);
 }
 
 export async function updateQuotationStatus(formData: FormData): Promise<void> {
-  const session = await getActiveSession()
-  const user = session?.user as any
-  if (!user?.companyId) return
+  await assertPermission("SALE_EDIT");
+  const session = await getActiveSession();
+  const user = session?.user as any;
+  if (!user?.companyId) return;
 
-  const companyId = user.companyId as string
-  const id = formData.get("id") as string
-  const status = formData.get("status") as QuotationStatus
+  const companyId = user.companyId as string;
+  const id = formData.get("id") as string;
+  const status = formData.get("status") as QuotationStatus;
 
-  const VALID = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"] as const
-  if (!VALID.includes(status as any)) return
+  const VALID = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"] as const;
+  if (!VALID.includes(status as any)) return;
 
   try {
     await db.quotation.update({
       where: { id, companyId },
       data: { status },
-    })
+    });
   } catch {
-    return
+    return;
   }
 
-  revalidatePath(`/quotations/${id}`)
-  revalidatePath("/quotations")
+  revalidatePath(`/quotations/${id}`);
+  revalidatePath("/quotations");
 }
 
 export async function convertQuotationToInvoice(
   _prev: ActionState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
-  const session = await getActiveSession()
-  const user = session?.user as any
-  if (!user?.companyId) return { error: "Not authenticated" }
+  await assertPermission("SALE_CREATE");
+  const session = await getActiveSession();
+  const user = session?.user as any;
+  if (!user?.companyId) return { error: "Not authenticated" };
 
-  const companyId = user.companyId as string
-  const userId = user.id as string
-  const quoteId = formData.get("quoteId") as string
+  const companyId = user.companyId as string;
+  const userId = user.id as string;
+  const quoteId = formData.get("quoteId") as string;
 
   const quote = await db.quotation.findFirst({
     where: { id: quoteId, companyId },
     include: {
       items: { include: { product: { select: { name: true } } } },
     },
-  })
-  if (!quote) return { error: "Quotation not found" }
+  });
+  if (!quote) return { error: "Quotation not found" };
 
   // Redirect to new invoice pre-filled — store quote context in URL
   redirect(
-    `/sales/new?fromQuote=${quoteId}&customerId=${quote.customerId ?? ""}`
-  )
+    `/sales/new?fromQuote=${quoteId}&customerId=${quote.customerId ?? ""}`,
+  );
 }
 
 export async function deleteQuotation(
   _prev: ActionState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
-  const session = await getActiveSession()
-  const user = session?.user as any
-  if (!user?.companyId) return { error: "Not authenticated" }
+  await assertPermission("SALE_CANCEL");
+  const session = await getActiveSession();
+  const user = session?.user as any;
+  if (!user?.companyId) return { error: "Not authenticated" };
 
-  const companyId = user.companyId as string
-  const id = formData.get("id") as string
+  const companyId = user.companyId as string;
+  const id = formData.get("id") as string;
 
   try {
-    await db.quotation.delete({ where: { id, companyId } })
+    await db.quotation.delete({ where: { id, companyId } });
   } catch {
-    return { error: "Failed to delete quotation" }
+    return { error: "Failed to delete quotation" };
   }
 
-  revalidatePath("/quotations")
-  redirect("/quotations")
+  revalidatePath("/quotations");
+  redirect("/quotations");
 }

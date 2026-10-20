@@ -1,44 +1,31 @@
-# Company backup and disaster recovery
+# Encrypted office backup and recovery
 
-## Format and security
+Application exports are encrypted `.godown-backup` files using AES-256-GCM, a scrypt-derived key, per-collection counts and a SHA-256 payload checksum. Version 3 includes the financial data, people/PIN hashes, imports/opening-stock evidence and evening-delivery receipts. Version 2 can still be validated/restored where compatible; it lacks the newer collections. Live desk sessions are intentionally excluded. Do not put the encryption key beside the backup or in chat.
 
-Every backup is a UTF-8 JSON encrypted envelope (`application/vnd.poultry.backup+json`). The authenticated cipher is AES-256-GCM and the key is derived with scrypt from `BACKUP_ENCRYPTION_KEY` (scheduled jobs) or an owner-supplied passphrase (manual exports). Never store the key beside the backup. The decrypted document identifies `poultry.company-backup`, has an integer `schemaVersion`, per-collection record counts, and a SHA-256 checksum over canonicalized data.
+## Daily backup
 
-Version 1 contains company configuration; users (including password hashes); the canonical role-permission matrix; document sequences; customers; suppliers; categories; products; batches; stock movements; purchase orders and lines; purchase returns and lines; sales invoices and lines; sales returns and lines; customer and supplier payments; chart of accounts; vouchers/journal entries and lines; PDC cheques; expenses; targets; routes and visits; quotations and lines; payment schedules; and audit logs. It excludes global failed-login telemetry because that data is not company-owned. A format change requires a schema-version increment and migration support.
+The owner uses More → Settings → Download encrypted office backup. Configure `BACKUP_ENCRYPTION_KEY` before using the download link. Store a copy outside the hosting account. For nightly automation, configure private R2 storage or encrypted email and schedule `/api/cron/backup` with the secret bearer header; see HOSTINGER-DEPLOYMENT.md. HTTP 503 means a destination/provider failed, not a successful backup. An email prepared locally is not proof it arrived.
 
-Only an authenticated `OWNER` with `BACKUP_RESTORE` may generate, stage, or approve restoration. Transport must use TLS. R2 buckets must be private, use least-privilege credentials, server-side encryption, versioning/object lock where available, and access logging. Rotate encryption keys annually and after any suspected disclosure; retain old keys until their backups expire.
+Keep at least 30 daily backups, 12 month-end and 7 year-end copies if required by the client's retention policy. The R2 routine prunes ordinary daily objects after 30 days; preserve month/year-end copies under a separate archival prefix before pruning. Enable provider recovery history/PITR appropriate to the acceptable data-loss window. Agree this policy with the owner; nightly export alone may lose a whole day's work.
 
-## Schedule, retention, and storage
+## Test and restore to a separate database
 
-* Run `/api/cron/backup` nightly after close of business. Alert when any company fails or when no destination is configured.
-* Keep 30 daily, 12 month-end, and 7 year-end backups. The application automatically prunes ordinary R2 daily objects after 30 days; move month/year-end copies to locked archival prefixes before pruning.
-* Primary: private Cloudflare R2 in a region appropriate to the company. Secondary: a separate-account, encrypted offline/object-locked copy. Email is emergency-only and must use an encrypted artifact.
-* Weekly, verify that the newest object downloads, decrypts, and passes checksum/record-count validation. Quarterly, run the full drill below.
+1. Keep the live database and prior application release untouched. Download the backup and obtain its encryption key separately.
+2. Settings → Validate a backup checks authentication, checksum, counts, references, stock movements and balanced journals. **This does not restore data and is not a substitute for an actual recovery drill.** The old spreadsheet importer is not this operation.
+3. Create an EMPTY PostgreSQL database. Install this matching app release on the operator's trusted machine. Apply migrations to the empty target using a temporary secure `DATABASE_URL`/`DIRECT_URL`; never accidentally inherit the production direct URL.
+4. Set `RESTORE_DATABASE_URL` to the empty target and `BACKUP_ENCRYPTION_KEY` to the backup's key through a private environment file or secure shell environment. Run:
 
-## Recovery procedure
+```sh
+npm ci
+npm run db:generate
+# With DATABASE_URL and, if needed, DIRECT_URL pointing to the EMPTY target:
+npm run db:deploy
+npm run backup:restore -- --empty-database --file /private/path/company.godown-backup
+```
 
-1. Declare an incident, assign a recovery owner and recorder, stop writes, record incident/ticket, target company, artifact key, checksum, schema version, application/database versions, and timestamps.
-2. Take and retain a rollback snapshot of production. Download the selected encrypted artifact over TLS and obtain its key through the secrets manager using two-person access.
-3. As the company owner, submit `action=stage`, `file`, and `passphrase` to `/api/import`. This models restoration into a new empty test tenant, verifies authenticated decryption, schema/count/checksum, foreign keys, batch stock against movements, finite customer/supplier ledger balances, and debit/credit journal equality. Resolve **every** error; never edit an encrypted backup in place.
-4. Perform an isolated database restoration into a newly created empty test database/company using the schema version recorded in the manifest. Run migrations only according to the version-specific recovery release. Compare all manifest counts and run the SQL controls below. The API stage approval expires after 15 minutes and is bound to the artifact checksum and target company.
-5. Submit the unchanged file with `action=production` and its `approvalToken`. Approval is a gate, not an unattended destructive database write. During the approved maintenance window, restore the test-verified snapshot using the database operator tooling, mapping only the tenant company ID. Do not merge into a populated company. Atomically switch traffic only after checks pass.
-6. Repeat controls in production, sample invoices/purchases and attachments, require owner/accountant sign-off, re-enable writes, monitor errors and financial reports. If any check fails, keep writes stopped and revert the rollback snapshot.
-7. Revoke temporary access, securely discard local plaintext, record recovery time/data loss, results, approvers, exceptions, and follow-up work.
+The restore command refuses a populated target, runs transactionally, restores parent records before dependent rows, resolves account/journal self references, and verifies every restored collection's count. It does not overwrite or merge the live company. It resets session identifiers/lockout counters and never restores signed-in desk sessions. Keep this operator task off a public web route.
 
-### Mandatory controls
+5. Run the target app on a private/test address. Verify mill login, owner PIN, staff roles, representative bill/purchase/return/direct deal, buyer/mill balances, stock, P&L and trial balance. Compare these with the original snapshot and manifest counts. Record the backup date, checksum, recovery duration and outcomes. A structural validation result alone is insufficient.
+6. If recovery is required, stop live writes and take a final rollback snapshot. Switch the application's database settings to the TESTED restored database; update both pooled and direct URLs, restart and verify `/api/health` and the owner's book. Keep the old database intact until the owner signs off. Re-enable the scheduler only after checking restored delivery receipts; do not blindly resend WhatsApp messages with unknown acceptance.
 
-Run tenant-scoped equivalents and attach output to the drill record: orphan counts for every relationship; `ProductBatch.quantity = SUM(StockMovement.quantity)` by batch; customer opening balance + posted invoices − non-reversed payments − posted returns; supplier opening balance + posted purchases − non-voided payments − posted returns; and journal debit total = credit total for every voucher. Also compare every collection count and the SHA-256 manifest checksum. Zero exceptions are permitted.
-
-## Restoration drill record — 2026-07-26
-
-| Field | Result |
-|---|---|
-| Scope | Complete synthetic version-1 company artifact; generation → encryption → decrypt → stage validation → production-approval gate |
-| Environment | Automated isolated test fixture; no production data or secrets |
-| Commands | `npm test`; `npm run lint`; `npm run build` |
-| Security | Wrong/tampered content rejected by authenticated encryption/checksum; approval bound to company/checksum and expires in 15 minutes |
-| Integrity | Foreign keys, batch movement totals, customer/supplier calculations, and balanced journals exercised |
-| Outcome | Passed automated format, cryptography, validation, and approval-gate drill; operator database cutover is not claimed and must be performed quarterly in the isolated database environment |
-| Evidence | `src/lib/company-backup.test.ts` and CI/build output for this change |
-
-The recovery owner must append a dated operational drill entry each quarter. A drill is incomplete until an actual empty database restoration and rollback/cutover rehearsal is signed by both owner and accountant/operations reviewer.
+If the wrong key, mismatched schema, missing references or unbalanced stock/journals is reported, stop and investigate. Never edit a backup's checksum to force it through or disable encryption verification. For very large datasets, use the database provider's transactional backup/restore tooling and verify the same business controls.

@@ -1,157 +1,63 @@
-import { calculateCustomerBalance } from "@/lib/customer-ledger"
-import { calculateSupplierBalance } from "@/lib/supplier-ledger"
-import { db } from "@/lib/db"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { redirect } from "next/navigation"
-import Link from "next/link"
-import { ChevronLeft } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
-
-export const dynamic = "force-dynamic"
-export const metadata = { title: "Balance Sheet" }
-
-export default async function BalanceSheetPage() {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/login")
-  const companyId = (session.user as any).companyId as string
-
-  const [inventoryBatches, customers, suppliers] = await Promise.all([
-    db.productBatch.findMany({
-      where: { companyId, quantity: { gt: 0 } },
-      select: { quantity: true, purchasePrice: true },
-    }),
-    db.customer.findMany({
-      where: { companyId },
-      select: {
-        openingBalance: true,
-        invoices: { where: { status: "POSTED" }, select: { netAmount: true } },
-        payments: { where: { status: "POSTED" }, select: { amount: true, discountAmount: true } },
-        saleReturns: { where: { status: "POSTED" }, select: { totalAmount: true } },
-      },
-    }),
-    db.supplier.findMany({
-      where: { companyId },
-      select: {
-        openingBalance: true,
-        purchases: { where: { status: "POSTED" }, select: { netAmount: true, paidAmount: true } },
-        payments: { where: { status: "POSTED" }, select: { amount: true, isVoided: true } },
-        purchaseReturns: { where: { status: "POSTED" }, select: { totalAmount: true } },
-      },
-    }),
-  ])
-
-  // ── Assets ────────────────────────────────────────────────────────────────
-  const inventoryValue = inventoryBatches.reduce(
-    (s, b) => s + b.quantity * parseFloat(b.purchasePrice.toString()),
-    0
-  )
-
-  const accountsReceivable = customers.reduce((total, c) => {
-    const balance = calculateCustomerBalance({ openingBalance: c.openingBalance,
-      invoices: c.invoices, payments: c.payments, returns: c.saleReturns }).closingBalance
-    return total + Math.max(0, balance)
-  }, 0)
-
-  const totalCurrentAssets = inventoryValue + accountsReceivable
-
-  // ── Liabilities ──────────────────────────────────────────────────────────
-  const accountsPayable = suppliers.reduce((total, s) => {
-    const balance = calculateSupplierBalance({ openingBalance: s.openingBalance,
-      purchases: s.purchases, payments: s.payments, returns: s.purchaseReturns }).closingBalance
-    return total + Math.max(0, balance)
-  }, 0)
-
-  const totalLiabilities = accountsPayable
-
-  // ── Equity ───────────────────────────────────────────────────────────────
-  const equity = totalCurrentAssets - totalLiabilities
-
-  const today = new Date().toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  })
-
+import { getActiveSession } from "@/lib/session";
+import { ledgerBalances } from "@/lib/accounting/ledger-report";
+import { businessDate } from "@/lib/business-time";
+import { redirect } from "next/navigation";
+import { formatCurrency } from "@/lib/utils";
+export const dynamic = "force-dynamic";
+export default async function BalanceSheet() {
+  const session = await getActiveSession();
+  if (!session?.user || !["OWNER", "ACCOUNTANT"].includes(session.user.role))
+    redirect("/desk");
+  const rows = await ledgerBalances(session.user.companyId);
+  const assets = rows.filter((a) => a.type === "ASSET"),
+    liabilities = rows.filter((a) => a.type === "LIABILITY"),
+    equity = rows.filter((a) => a.type === "EQUITY");
+  const earnings = -rows
+    .filter((a) => a.type === "REVENUE" || a.type === "EXPENSE")
+    .reduce((s, a) => s + a.net, 0);
+  const assetTotal = assets.reduce((s, a) => s + a.net, 0),
+    liabilityTotal = -liabilities.reduce((s, a) => s + a.net, 0),
+    equityTotal = -equity.reduce((s, a) => s + a.net, 0) + earnings;
   return (
-    <div className="max-w-2xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/reports" className="text-slate-400 hover:text-slate-600 transition-colors">
-          <ChevronLeft className="h-5 w-5" />
-        </Link>
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Balance Sheet</h1>
-          <p className="text-sm text-slate-500">Assets, liabilities, and equity as of {today}</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        {/* Assets */}
-        <div className="px-6 py-4 border-b border-slate-100">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Assets</p>
-          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            Current Assets
-          </p>
-          <BSRow label="Inventory (at purchase cost)" value={inventoryValue} indent />
-          <BSRow label="Accounts Receivable" value={accountsReceivable} indent />
-          <div className="mt-3 pt-3 border-t border-slate-100">
-            <BSRow label="Total Assets" value={totalCurrentAssets} bold />
-          </div>
-        </div>
-
-        {/* Liabilities */}
-        <div className="px-6 py-4 border-b border-slate-100">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Liabilities</p>
-          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            Current Liabilities
-          </p>
-          <BSRow label="Accounts Payable" value={accountsPayable} indent />
-          <div className="mt-3 pt-3 border-t border-slate-100">
-            <BSRow label="Total Liabilities" value={totalLiabilities} bold />
-          </div>
-        </div>
-
-        {/* Equity */}
-        <div className={`px-6 py-5 ${equity >= 0 ? "bg-blue-50" : "bg-red-50"}`}>
-          <div className="flex justify-between items-center">
-            <div>
-              <span className="text-base font-bold text-slate-900">Owner's Equity</span>
-              <p className="text-xs text-slate-500 mt-0.5">Total Assets − Total Liabilities</p>
-            </div>
-            <span className={`text-2xl font-bold ${equity >= 0 ? "text-blue-700" : "text-red-700"}`}>
-              {equity < 0 && "−"}{formatCurrency(Math.abs(equity))}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <p className="text-xs text-slate-400">
-        Inventory is valued at purchase cost. Receivables and payables include opening balances.
-        Cash and bank balances are not tracked in this system.
+    <div className="mx-auto max-w-3xl space-y-5">
+      <h1 className="text-2xl font-bold">Balance sheet</h1>
+      <p>As of {businessDate()} · Pakistan time</p>
+      {[
+        ["Assets", assets, 1],
+        ["Liabilities", liabilities, -1],
+        ["Equity", equity, -1],
+      ].map(([label, items, sign]) => (
+        <section key={String(label)} className="rounded border bg-white p-4">
+          <h2 className="mb-3 font-semibold">{String(label)}</h2>
+          {(items as typeof rows).map((a) => (
+            <p key={a.id} className="flex justify-between py-1">
+              <span>{a.name}</span>
+              <span>{formatCurrency(a.net * Number(sign))}</span>
+            </p>
+          ))}
+          {label === "Equity" && (
+            <p className="flex justify-between">
+              <span>Accumulated earnings</span>
+              <span>{formatCurrency(earnings)}</span>
+            </p>
+          )}
+        </section>
+      ))}
+      <p>Total assets: {formatCurrency(assetTotal)}</p>
+      <p>
+        Liabilities and equity: {formatCurrency(liabilityTotal + equityTotal)}
+      </p>
+      <p
+        className={
+          Math.abs(assetTotal - liabilityTotal - equityTotal) < 0.01
+            ? "text-green-700"
+            : "text-red-700"
+        }
+      >
+        {Math.abs(assetTotal - liabilityTotal - equityTotal) < 0.01
+          ? "Books balanced"
+          : "Books out of balance — review the trial balance"}
       </p>
     </div>
-  )
-}
-
-function BSRow({
-  label,
-  value,
-  indent,
-  bold,
-}: {
-  label: string
-  value: number
-  indent?: boolean
-  bold?: boolean
-}) {
-  return (
-    <div className={`flex justify-between items-center py-1.5 ${indent ? "pl-4" : ""}`}>
-      <span className={`text-sm ${bold ? "font-semibold text-slate-900" : "text-slate-600"}`}>
-        {label}
-      </span>
-      <span className={`text-sm font-${bold ? "bold" : "medium"} text-slate-900`}>
-        {formatCurrency(value)}
-      </span>
-    </div>
-  )
+  );
 }

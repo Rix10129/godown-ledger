@@ -1,41 +1,57 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import Link from "next/link"
-import { signOut } from "next-auth/react"
-import type { Session } from "next-auth"
-import { Bell, ChevronDown, LogOut, User } from "lucide-react"
-import { SyncIndicator } from "@/components/sync-indicator"
-import { DarkModeToggle } from "@/components/dark-mode-toggle"
+import { LiveDeskUpdates } from "@/components/live-desk-updates";
+import { useState } from "react";
+import Link from "next/link";
+import { signIn, signOut } from "next-auth/react";
+import type { Session } from "next-auth";
+import { Bell, ChevronDown, LogOut, User } from "lucide-react";
+import { DarkModeToggle } from "@/components/dark-mode-toggle";
 
 const roleBadge: Record<string, string> = {
-  OWNER:    "bg-purple-100 text-purple-700 border-purple-200",
-  ADMIN:    "bg-blue-100   text-blue-700   border-blue-200",
-  CASHIER:  "bg-green-100  text-green-700  border-green-200",
+  OWNER: "bg-purple-100 text-purple-700 border-purple-200",
+  ADMIN: "bg-blue-100   text-blue-700   border-blue-200",
+  CASHIER: "bg-green-100  text-green-700  border-green-200",
   SALESMAN: "bg-orange-100 text-orange-700 border-orange-200",
-}
+};
 
 interface TopbarProps {
-  session: Session
-  alertCount?: number
+  session: Session;
+  alertCount?: number;
 }
 
 export function Topbar({ session, alertCount = 0 }: TopbarProps) {
-  const [open, setOpen] = useState(false)
-  const user = session.user as any
+  const [open, setOpen] = useState(false);
+  const user = session.user as any;
   const initials = (user.name as string)
     .split(" ")
     .slice(0, 2)
     .map((n: string) => n[0])
     .join("")
-    .toUpperCase()
+    .toUpperCase();
 
   return (
-    <header className="h-13 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 print:hidden">
-      <span className="text-sm font-semibold text-slate-800">{user.companyName}</span>
+    <header className="h-13 bg-white border-b border-slate-200 flex items-center justify-between pl-14 pr-3 md:px-6 shrink-0 print:hidden">
+      <span className="hidden md:inline text-sm font-semibold text-slate-800">
+        {user.companyName}
+      </span>
 
       <div className="flex items-center gap-2">
-        <SyncIndicator />
+        <LiveDeskUpdates />
+        <button
+          className="rounded border border-slate-300 px-3 py-2 text-sm font-medium"
+          onClick={async () => {
+            localStorage.setItem("godown-desk-lock", String(Date.now()));
+            const result = await signIn("credentials", {
+              mode: "leave",
+              redirect: false,
+            });
+            if (result?.ok) window.location.assign("/desk");
+            else await signOut({ callbackUrl: "/login" });
+          }}
+        >
+          Leave the desk
+        </button>
         <DarkModeToggle />
         {/* Alert bell */}
         <Link
@@ -61,10 +77,13 @@ export function Topbar({ session, alertCount = 0 }: TopbarProps) {
               {initials}
             </div>
             <div className="text-left hidden sm:block leading-none">
-              <p className="text-xs font-semibold text-slate-900">{user.name}</p>
+              <p className="text-xs font-semibold text-slate-900">
+                {user.name}
+              </p>
               <span
                 className={`inline-block mt-0.5 px-1.5 py-px text-[10px] font-semibold rounded border ${
-                  roleBadge[user.role] ?? "bg-slate-100 text-slate-500 border-slate-200"
+                  roleBadge[user.role] ??
+                  "bg-slate-100 text-slate-500 border-slate-200"
                 }`}
               >
                 {user.role}
@@ -75,11 +94,18 @@ export function Topbar({ session, alertCount = 0 }: TopbarProps) {
 
           {open && (
             <>
-              <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setOpen(false)}
+              />
               <div className="absolute right-0 mt-1.5 w-52 bg-white rounded-xl border border-slate-200 shadow-lg z-20 overflow-hidden py-1">
                 <div className="px-4 py-2.5 border-b border-slate-100">
-                  <p className="text-sm font-semibold text-slate-900 truncate">{user.name}</p>
-                  <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                  <p className="text-sm font-semibold text-slate-900 truncate">
+                    {user.name}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">
+                    {user.email}
+                  </p>
                 </div>
                 <button className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
                   <User className="w-4 h-4 text-slate-400" />
@@ -98,5 +124,5 @@ export function Topbar({ session, alertCount = 0 }: TopbarProps) {
         </div>
       </div>
     </header>
-  )
+  );
 }

@@ -1,32 +1,72 @@
-/**
- * The one shared formula for a document line's pre-tax contribution, used
- * identically by sale invoices, purchases, and quotations so a change to
- * discount/tax/scheme rules can't drift between the create, edit, and
- * offline-sync code paths.
- *
- * A bonus/free line (isBonus) contributes zero revenue and zero tax — it
- * still deducts stock via the normal per-line quantity, it just doesn't
- * count toward totalAmount/taxAmount/netAmount.
- */
-export function lineBase(quantity: number, unitPrice: number, discount: number, isBonus?: boolean): number {
-  if (isBonus) return 0
-  return quantity * unitPrice * (1 - discount / 100)
+import Decimal from "decimal.js";
+
+/** Money is rounded half-up to paisas at each line, shared by online/offline entry. */
+export function lineBase(
+  quantity: number,
+  unitPrice: number,
+  discount: number,
+  isBonus?: boolean,
+): number {
+  if (isBonus) return 0;
+  return new Decimal(quantity)
+    .times(unitPrice)
+    .times(new Decimal(1).minus(new Decimal(discount).div(100)))
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+    .toNumber();
 }
-
-export type DocumentTotals = { totalAmount: number; taxAmount: number; netAmount: number }
-
-export function calculateDocumentTotals<T extends { quantity: number; discount: number; taxRate: number; isBonus?: boolean }>(
+export type DocumentTotals = {
+  totalAmount: number;
+  taxAmount: number;
+  netAmount: number;
+};
+export function calculateDocumentTotals<
+  T extends {
+    quantity: number;
+    discount: number;
+    taxRate: number;
+    isBonus?: boolean;
+  },
+>(
   lines: T[],
   unitPrice: (line: T) => number,
-  discountAmount: number
+  discountAmount: number,
 ): DocumentTotals {
-  let totalAmount = 0
-  let taxAmount = 0
+  if (!Number.isFinite(discountAmount) || discountAmount < 0)
+    throw new Error("Invalid document discount");
+  let total = new Decimal(0),
+    tax = new Decimal(0);
   for (const line of lines) {
-    const base = lineBase(line.quantity, unitPrice(line), line.discount, line.isBonus)
-    totalAmount += base
-    taxAmount += (base * line.taxRate) / 100
+    if (
+      !Number.isFinite(line.quantity) ||
+      line.quantity <= 0 ||
+      !Number.isFinite(unitPrice(line)) ||
+      unitPrice(line) < 0 ||
+      !Number.isFinite(line.discount) ||
+      line.discount < 0 ||
+      line.discount > 100 ||
+      !Number.isFinite(line.taxRate) ||
+      line.taxRate < 0 ||
+      line.taxRate > 100
+    )
+      throw new Error("Invalid quantity, rate, discount or tax");
+    const base = new Decimal(
+      lineBase(line.quantity, unitPrice(line), line.discount, line.isBonus),
+    );
+    total = total.plus(base);
+    tax = tax.plus(
+      base
+        .times(line.taxRate)
+        .div(100)
+        .toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    );
   }
-  const netAmount = Math.max(0, totalAmount - discountAmount + taxAmount)
-  return { totalAmount, taxAmount, netAmount }
+  if (new Decimal(discountAmount).gt(total))
+    throw new Error("Document discount exceeds the line total");
+  return {
+    totalAmount: total.toNumber(),
+    taxAmount: tax.toNumber(),
+    netAmount: Decimal.max(0, total.minus(discountAmount).plus(tax))
+      .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+      .toNumber(),
+  };
 }

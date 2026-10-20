@@ -1,68 +1,87 @@
-"use server"
+"use server";
 
-import { db } from "@/lib/db"
-import { authorize, forbiddenAction } from "@/lib/authorization"
-import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
-import { MovementType } from "@prisma/client"
+import { postStockAdjustment } from "@/lib/accounting/posting-service";
+import { validQuantity } from "@/lib/quantities";
+import Decimal from "decimal.js";
+import { db } from "@/lib/db";
+import { authorize, forbiddenAction } from "@/lib/authorization";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { MovementType } from "@prisma/client";
 
-type ActionState = { error: string } | null
+type ActionState = { error: string } | null;
 
 export async function createStockAdjustment(
   _prev: ActionState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
-  const authorization = await authorize("STOCK_ADJUST")
-  if (!authorization.ok) return forbiddenAction
-  const companyId = authorization.actor.companyId
+  const authorization = await authorize("STOCK_ADJUST");
+  if (!authorization.ok) return forbiddenAction;
+  const companyId = authorization.actor.companyId;
 
-  const batchId = (formData.get("batchId") as string)?.trim()
-  const productId = (formData.get("productId") as string)?.trim()
-  const direction = formData.get("direction") as string // "add" | "subtract"
-  const quantity = parseInt(formData.get("quantity") as string)
-  const notes = (formData.get("notes") as string)?.trim() || null
+  const batchId = (formData.get("batchId") as string)?.trim();
+  const productId = (formData.get("productId") as string)?.trim();
+  const direction = formData.get("direction") as string; // "add" | "subtract"
+  const quantity = parseFloat(formData.get("quantity") as string);
+  const notes = (formData.get("notes") as string)?.trim() || null;
 
-  if (!batchId || !productId) return { error: "Product and batch are required" }
-  if (!["add", "subtract"].includes(direction)) return { error: "Invalid adjustment direction" }
-  if (!quantity || quantity < 1) return { error: "Quantity must be at least 1" }
+  if (!batchId || !productId)
+    return { error: "Product and batch are required" };
+  if (!["add", "subtract"].includes(direction))
+    return { error: "Invalid adjustment direction" };
+  if (!validQuantity(quantity)) return { error: "Quantity must be at least 1" };
 
   try {
     await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "ProductBatch" WHERE id = ${batchId} AND "companyId" = ${companyId} FOR UPDATE`;
       const batch = await tx.productBatch.findFirst({
         where: { id: batchId, companyId, productId },
         include: { product: { select: { name: true } } },
-      })
-      if (!batch) throw new Error("Batch not found")
+      });
+      if (!batch) throw new Error("Batch not found");
 
       if (direction === "subtract" && batch.quantity < quantity) {
         throw new Error(
-          `Cannot remove ${quantity} — only ${batch.quantity} in stock`
-        )
+          `Cannot remove ${quantity} — only ${batch.quantity} in stock`,
+        );
       }
 
-      const delta = direction === "add" ? quantity : -quantity
+      const delta = direction === "add" ? quantity : -quantity;
 
       await tx.productBatch.update({
         where: { id: batchId },
         data: { quantity: { increment: delta } },
-      })
+      });
 
-      await tx.stockMovement.create({
+      const movement = await tx.stockMovement.create({
         data: {
           companyId,
           productId,
           batchId,
           type: MovementType.ADJUSTMENT,
           quantity: delta,
-          notes: notes ?? `Stock adjustment: ${direction === "add" ? "+" : "-"}${quantity}`,
+          notes:
+            notes ??
+            `Stock adjustment: ${direction === "add" ? "+" : "-"}${quantity}`,
         },
-      })
-    })
+      });
+      await postStockAdjustment(tx, {
+        companyId,
+        sourceId: movement.id,
+        number: movement.id,
+        date: movement.createdAt,
+        amount: new Decimal(quantity)
+          .times(batch.purchasePrice.toString())
+          .toFixed(2),
+        increase: direction === "add",
+        description: notes ?? "Stock adjustment",
+      });
+    });
   } catch (e: any) {
-    return { error: e?.message ?? "Failed to save adjustment" }
+    return { error: e?.message ?? "Failed to save adjustment" };
   }
 
-  revalidatePath("/inventory")
-  revalidatePath("/alerts")
-  redirect("/inventory")
+  revalidatePath("/inventory");
+  revalidatePath("/alerts");
+  redirect("/inventory");
 }
