@@ -17,6 +17,6 @@ npm run lint
 npm run typecheck
 npm run test:unit
 # Integration tests use the separate poultry_test database, matching CI:
-DATABASE_URL=postgresql://poultry:poultry@127.0.0.1:5432/poultry_test npx prisma db push --skip-generate
+DATABASE_URL=postgresql://poultry:poultry@127.0.0.1:5432/poultry_test npx prisma db push
 DATABASE_URL=postgresql://poultry:poultry@127.0.0.1:5432/poultry_test RUN_DATABASE_CONCURRENCY_TESTS=1 npm run test:integration
 ```
