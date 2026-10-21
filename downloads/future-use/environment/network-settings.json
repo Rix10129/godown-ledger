@@ -1,0 +1,10 @@
+{
+  "network_policy_type": "restricted",
+  "presets": [
+    "package_managers"
+  ],
+  "additional_allowed_domains": [
+    "binaries.prisma.sh"
+  ],
+  "note": "Exported reference only; provider-managed package-manager domain lists may change. No credential bindings or values exported."
+}

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd /workspace/godown-ledger
+npm ci --cache /workspace/.npm-cache
+mkdir -p /workspace/.godown-setup
+if ! docker image inspect postgres@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3 >/dev/null 2>&1; then
+  docker pull postgres@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+fi
+node <<'NODE'
+const fs = require("fs");
+if (!fs.existsSync(".env")) {
+  fs.writeFileSync(".env", "DATABASE_URL=postgresql://godown:local_dev_only@127.0.0.1:5432/godown\nNEXTAUTH_URL=http://localhost:3000\nNEXTAUTH_SECRET=" + require("crypto").randomBytes(32).toString("hex") + "\n", {mode: 0o600});
+}
+NODE
+if docker container inspect godown-postgres >/dev/null 2>&1; then
+  docker start godown-postgres >/dev/null
+else
+  docker run -d --name godown-postgres -e POSTGRES_USER=godown -e POSTGRES_PASSWORD=local_dev_only -e POSTGRES_DB=godown -p 127.0.0.1:5432:5432 -v /workspace/.godown-setup/pgdata:/var/lib/postgresql/data postgres@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3 >/dev/null
+fi
+for attempt in {1..30}; do
+  if docker exec godown-postgres pg_isready -U godown -d godown >/dev/null; then break; fi
+  sleep 1
+done
+docker exec godown-postgres pg_isready -U godown -d godown
+npm run db:generate
+npx prisma migrate deploy
+npm run db:seed
