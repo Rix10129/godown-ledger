@@ -2,7 +2,7 @@ import { Prisma, VoucherType, type PaymentMode } from "@prisma/client"
 import Decimal from "decimal.js"
 import { SYSTEM_ACCOUNTS, validateSystemAccounts, type SystemAccount } from "./system-accounts"
 import { allocateDocumentNumber } from "../document-number"
-import { directDealSides, type DirectPay } from "../direct-deal"
+import { directDealSides, type DirectPay } from "./direct-deal"
 
 type Tx = Prisma.TransactionClient
 type Amount = Prisma.Decimal | Decimal | number | string
