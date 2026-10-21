@@ -1,5 +1,5 @@
 "use client";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
   createDirect,
   cancelDirect,
@@ -14,6 +14,7 @@ export function DirectDealForm({
   requestKey: string;
 }) {
   const [state, action, pending] = useActionState(createDirect, null);
+  const [unit, setUnit] = useState("BAG");
   return (
     <form
       action={action}
@@ -62,7 +63,7 @@ export function DirectDealForm({
         />
       </label>
       <label>
-        Quantity
+        Quantity ({unit})
         <input
           className="mt-1 w-full rounded border p-2"
           name="quantity"
@@ -74,14 +75,20 @@ export function DirectDealForm({
       </label>
       <label>
         Unit
-        <select name="unit" className="mt-1 w-full rounded border p-2">
+        <select
+          name="unit"
+          value={unit}
+          onChange={(event) => setUnit(event.target.value)}
+          className="mt-1 w-full rounded border p-2"
+        >
+          <option value="BAG">Bag</option>
           <option>KG</option>
           <option>METER</option>
           <option>THAAN</option>
         </select>
       </label>
       <label>
-        Mill cost per unit
+        Mill cost per {unit.toLowerCase()}
         <input
           className="mt-1 w-full rounded border p-2"
           name="costRate"
@@ -92,7 +99,7 @@ export function DirectDealForm({
         />
       </label>
       <label>
-        Selling price per unit
+        Selling price per {unit.toLowerCase()}
         <input
           className="mt-1 w-full rounded border p-2"
           name="saleRate"

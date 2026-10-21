@@ -370,7 +370,7 @@ export default async function GodownPage({
         )}
       </section>
       <p className="office-note">
-        Quantities keep their product’s unit: kg, metres or thaan.
+        Quantities keep their product’s unit: bags, or KG when traded by weight.
       </p>
     </div>
   );

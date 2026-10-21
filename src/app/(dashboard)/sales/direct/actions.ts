@@ -25,7 +25,7 @@ export async function createDirect(
   const quantity = Number(form.get("quantity")),
     costRate = Number(form.get("costRate")),
     saleRate = Number(form.get("saleRate")),
-    unit = String(form.get("unit") ?? "KG");
+    unit = String(form.get("unit") ?? "BAG");
   const key = String(form.get("key") ?? "");
   if (
     !/^[a-f0-9-]{36}$/i.test(key) ||
@@ -35,7 +35,7 @@ export async function createDirect(
     costRate <= 0 ||
     !Number.isFinite(saleRate) ||
     saleRate <= 0 ||
-    !["KG", "METER", "THAAN"].includes(unit)
+    !["BAG", "KG", "METER", "THAAN"].includes(unit)
   )
     return {
       error: "Enter the description, unit, positive quantity and both rates.",

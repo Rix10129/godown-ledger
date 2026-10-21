@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,13 +12,13 @@ import {
 } from "@/app/(dashboard)/inventory/actions";
 
 const UNITS = [
+  { value: "BAG", label: "Bag" },
+  { value: "KG", label: "Kilogram (optional)" },
   { value: "METER", label: "Meter" },
   { value: "YARD", label: "Yard" },
   { value: "THAAN", label: "Thaan" },
   { value: "ROLL", label: "Roll" },
-  { value: "KG", label: "Kilogram" },
   { value: "CONE", label: "Cone" },
-  { value: "BAG", label: "Bag" },
   { value: "PIECE", label: "Piece" },
 ];
 
@@ -47,6 +47,7 @@ interface ProductFormProps {
 export function ProductForm({ suppliers, product }: ProductFormProps) {
   const action = product ? updateProduct.bind(null, product.id) : createProduct;
   const [state, formAction, pending] = useActionState(action, null);
+  const [unit, setUnit] = useState(product?.unit ?? "BAG");
 
   return (
     <form action={formAction} className="space-y-5">
@@ -102,7 +103,9 @@ export function ProductForm({ suppliers, product }: ProductFormProps) {
           <Select
             id="unit"
             name="unit"
-            defaultValue={product?.unit ?? "KG"}
+            value={unit}
+            disabled={!!product}
+            onChange={(event) => setUnit(event.target.value)}
             required
           >
             {UNITS.map((u) => (
@@ -111,9 +114,15 @@ export function ProductForm({ suppliers, product }: ProductFormProps) {
               </option>
             ))}
           </Select>
+          {product && <input type="hidden" name="unit" value={product.unit} />}
+          <p className="text-xs text-slate-500">
+            Bags are the standard stock and billing unit. Choose KG for a
+            product traded by weight. Use separate products for different units;
+            an existing product keeps its original unit.
+          </p>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="subUnit">Sub Unit</Label>
+          <Label htmlFor="subUnit">Sub Unit (catalogue only)</Label>
           <Select
             id="subUnit"
             name="subUnit"
@@ -143,7 +152,9 @@ export function ProductForm({ suppliers, product }: ProductFormProps) {
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="purchasePrice">Purchase Price *</Label>
+          <Label htmlFor="purchasePrice">
+            Purchase Price (per {unit.toLowerCase()}) *
+          </Label>
           <Input
             id="purchasePrice"
             name="purchasePrice"
@@ -156,7 +167,9 @@ export function ProductForm({ suppliers, product }: ProductFormProps) {
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="salePrice">Sale Price *</Label>
+          <Label htmlFor="salePrice">
+            Sale Price (per {unit.toLowerCase()}) *
+          </Label>
           <Input
             id="salePrice"
             name="salePrice"
@@ -169,7 +182,7 @@ export function ProductForm({ suppliers, product }: ProductFormProps) {
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="reorderLevel">Reorder Level</Label>
+          <Label htmlFor="reorderLevel">Reorder Level ({unit})</Label>
           <Input
             id="reorderLevel"
             name="reorderLevel"

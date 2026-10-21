@@ -52,7 +52,10 @@ export default async function ReceiptsPage() {
                 </span>
               </p>
             ))}
-            <PriceReceiptForm id={r.id} />
+            <PriceReceiptForm
+              id={r.id}
+              unit={r.items.length === 1 ? r.items[0]?.product.unit : undefined}
+            />
           </div>
         </section>
       ))}

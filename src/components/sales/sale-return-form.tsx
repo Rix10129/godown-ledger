@@ -245,7 +245,7 @@ export function SaleReturnForm({
                     </p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                        {line.batchNumber}
+                        {line.batchNumber} · {line.unit}
                       </span>
                       <ExpiryBadge expiryDate={line.expiryDate} />
                     </div>

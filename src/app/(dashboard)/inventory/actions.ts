@@ -118,6 +118,17 @@ export async function updateProduct(
     return { error: e instanceof Error ? e.message : "Validation error" };
   }
 
+  const current = await db.product.findFirst({
+    where: { id, companyId },
+    select: { unit: true },
+  });
+  if (!current) return { error: "Product not found" };
+  if (parsed.unit !== current.unit)
+    return {
+      error:
+        "A product's stock unit cannot be changed. Create a separate BAG or KG product instead; quantities and rates are not automatically converted.",
+    };
+
   if (
     parsed.supplierId &&
     !(await db.supplier.findFirst({

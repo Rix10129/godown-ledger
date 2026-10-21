@@ -167,7 +167,7 @@ export function ClothReceiptForm({
     </form>
   );
 }
-export function PriceReceiptForm({ id }: { id: string }) {
+export function PriceReceiptForm({ id, unit }: { id: string; unit?: string }) {
   const [state, action, pending] = useActionState(priceReceipt, null);
   useEffect(() => {
     if (state?.ok) window.dispatchEvent(new Event("godown-entry-saved"));
@@ -179,7 +179,7 @@ export function PriceReceiptForm({ id }: { id: string }) {
     >
       <input name="id" type="hidden" value={id} />
       <label className="office-field">
-        Purchase rate <small>· Rs / unit</small>
+        Purchase rate <small>· Rs / {unit?.toLowerCase() ?? "unit"}</small>
         <input
           aria-label="Purchase rate"
           name="rate"
@@ -192,7 +192,7 @@ export function PriceReceiptForm({ id }: { id: string }) {
         />
       </label>
       <label className="office-field">
-        Selling rate <small>· Rs / unit</small>
+        Selling rate <small>· Rs / {unit?.toLowerCase() ?? "unit"}</small>
         <input
           aria-label="Selling rate"
           name="saleRate"
