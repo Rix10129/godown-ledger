@@ -34,9 +34,24 @@ const { PrismaClient } = await import("@prisma/client");
 const { PrismaPg } = await import("@prisma/adapter-pg");
 const { Pool } = await import("pg");
 const { default: bcrypt } = await import("bcryptjs");
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  connectionTimeoutMillis: 15000,
+  max: 2,
+});
 const db = new PrismaClient({ adapter: new PrismaPg(pool) });
-try {
+async function initialize() {
+  // Routine deployments must not acquire a setup transaction for an existing client.
+  // The explicit client:setup command retains its identity checks below.
+  if (process.argv.includes("--if-configured")) {
+    const initialized = await db.company.findFirst({ select: { id: true } });
+    if (initialized) {
+      console.log(
+        "Client database already initialized; first-time setup skipped.",
+      );
+      return;
+    }
+  }
   const email = process.env.INITIAL_OWNER_EMAIL.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     throw new Error("Owner email must be a valid email address");
@@ -106,8 +121,11 @@ try {
         "Client company created with empty books and an owner. No demo data installed.",
       );
     },
-    { timeout: 30000 },
+    { maxWait: 15000, timeout: 30000 },
   );
+}
+try {
+  await initialize();
 } catch (error) {
   console.error(error instanceof Error ? error.message : "Client setup failed");
   process.exitCode = 1;

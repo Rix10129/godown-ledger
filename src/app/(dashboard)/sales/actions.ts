@@ -454,7 +454,9 @@ export async function createInvoice(
   const schemeNotes = (formData.get("schemeNotes") as string) || null;
   const notes = (formData.get("notes") as string) || null;
   const linesJson = formData.get("linesJson") as string;
-  const bypassCreditLimit = formData.get("bypassCreditLimit") === "1";
+  const bypassCreditLimit =
+    formData.get("bypassCreditLimit") === "1" &&
+    (user.role === "OWNER" || user.role === "ADMIN");
   const draftId = String(formData.get("draftId") || "").trim() || null;
 
   if (!linesJson) return { error: "No line items provided" };

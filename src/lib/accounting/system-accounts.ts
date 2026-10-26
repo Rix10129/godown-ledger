@@ -1,5 +1,5 @@
 import type { Transaction as LedgerTransaction } from "@/lib/db";
-import { AccountType, type Prisma } from "@prisma/client";
+import { AccountType } from "@prisma/client";
 
 export const SYSTEM_ACCOUNTS = {
   CASH: { code: "1000", name: "Cash", type: AccountType.ASSET },
@@ -80,13 +80,24 @@ export async function validateSystemAccounts(tx: Tx, companyId: string) {
   const missing = Object.values(SYSTEM_ACCOUNTS).filter(
     (a) => !byCode.has(a.code),
   );
-  for (const account of missing) {
-    const created = await tx.account.upsert({
-      where: { code_companyId: { code: account.code, companyId } },
-      update: {},
-      create: { companyId, ...account, isSystem: true },
+  if (missing.length) {
+    // One insert avoids a database round trip per missing account. Another
+    // posting may fill the same gaps concurrently; keep its existing rows.
+    await tx.account.createMany({
+      data: missing.map((account) => ({
+        companyId,
+        ...account,
+        isSystem: true,
+      })),
+      skipDuplicates: true,
     });
-    byCode.set(account.code, created);
+    const created = await tx.account.findMany({
+      where: {
+        companyId,
+        code: { in: missing.map((account) => account.code) },
+      },
+    });
+    for (const account of created) byCode.set(account.code, account);
   }
   return Object.fromEntries(
     Object.entries(SYSTEM_ACCOUNTS).map(([key, value]) => [

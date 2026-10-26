@@ -9,7 +9,10 @@ const quantityResult = {
   compute: (row: { quantity: Prisma.Decimal }) => Number(row.quantity),
 };
 function createClient(pool: Pool) {
-  return new PrismaClient({ adapter: new PrismaPg(pool) }).$extends({
+  return new PrismaClient({
+    adapter: new PrismaPg(pool),
+    transactionOptions: { maxWait: 15_000, timeout: 30_000 },
+  }).$extends({
     result: {
       productBatch: {
         quantity: quantityResult,
@@ -37,6 +40,7 @@ if (!globalForPrisma.pool)
   globalForPrisma.pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 10,
+    connectionTimeoutMillis: 15_000,
   });
 if (!globalForPrisma.prisma)
   globalForPrisma.prisma = createClient(globalForPrisma.pool);

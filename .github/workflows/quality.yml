@@ -2,9 +2,9 @@ name: Quality
 
 on:
   push:
-    branches: [main, Production]
+    branches: [main, Production, client/textile-release-2026-10-20]
   pull_request:
-    branches: [main, Production]
+    branches: [main, Production, client/textile-release-2026-10-20]
 
 permissions:
   contents: read
