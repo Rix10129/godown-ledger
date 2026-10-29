@@ -20,6 +20,8 @@ const TYPE_LABELS: Record<string, string> = {
   WHOLESALER: "Wholesaler",
   GARMENT_UNIT: "Garment Unit",
   EXPORT_HOUSE: "Export House",
+  BUKRAM: "Bukram",
+  PRODUCTION_CLOTH: "Production Cloth",
 };
 
 export default async function RecoveryReportPage({

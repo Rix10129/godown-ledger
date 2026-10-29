@@ -4,6 +4,9 @@ import { Prisma } from "@prisma/client";
 type Transaction = LedgerTransaction;
 
 export const DOCUMENT_NUMBER_PREFIXES = {
+  CUSTOMER_ORDER: "SO",
+  PRODUCTION_JOB: "PJ",
+  PRODUCTION_RECEIPT: "PC",
   SALE_INVOICE: "INV",
   DIRECT_DEAL: "DD",
   CASH_MEMO: "CM",

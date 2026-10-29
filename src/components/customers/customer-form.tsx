@@ -1,28 +1,31 @@
-"use client"
+"use client";
 
-import { useActionState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
-import { createCustomer, updateCustomer } from "@/app/(dashboard)/customers/actions"
-import { AlertCircle } from "lucide-react"
+import { useActionState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import {
+  createCustomer,
+  updateCustomer,
+} from "@/app/(dashboard)/customers/actions";
+import { AlertCircle } from "lucide-react";
 
 export type CustomerData = {
-  id: string
-  name: string
-  type: string
-  phone: string | null
-  email: string | null
-  address: string | null
-  area: string | null
-  creditLimit: string
-  openingBalance: string
-}
+  id: string;
+  name: string;
+  type: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  area: string | null;
+  creditLimit: string;
+  openingBalance: string;
+};
 
 interface Props {
-  customer?: CustomerData
-  canAdjustOpeningBalance?: boolean
+  customer?: CustomerData;
+  canAdjustOpeningBalance?: boolean;
 }
 
 const TYPE_OPTIONS = [
@@ -30,11 +33,16 @@ const TYPE_OPTIONS = [
   { value: "WHOLESALER", label: "Wholesaler" },
   { value: "GARMENT_UNIT", label: "Garment Unit" },
   { value: "EXPORT_HOUSE", label: "Export House" },
-]
+  { value: "BUKRAM", label: "Bukram" },
+  { value: "PRODUCTION_CLOTH", label: "Production Cloth" },
+];
 
-export function CustomerForm({ customer, canAdjustOpeningBalance = false }: Props) {
-  const action = customer ? updateCustomer : createCustomer
-  const [state, formAction, pending] = useActionState(action, null)
+export function CustomerForm({
+  customer,
+  canAdjustOpeningBalance = false,
+}: Props) {
+  const action = customer ? updateCustomer : createCustomer;
+  const [state, formAction, pending] = useActionState(action, null);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -60,9 +68,15 @@ export function CustomerForm({ customer, canAdjustOpeningBalance = false }: Prop
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="type">Customer Type</Label>
-          <Select id="type" name="type" defaultValue={customer?.type ?? "RETAILER"}>
+          <Select
+            id="type"
+            name="type"
+            defaultValue={customer?.type ?? "RETAILER"}
+          >
             {TYPE_OPTIONS.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
             ))}
           </Select>
         </div>
@@ -117,7 +131,9 @@ export function CustomerForm({ customer, canAdjustOpeningBalance = false }: Prop
         </div>
         {(!customer || canAdjustOpeningBalance) && (
           <div className="space-y-1.5">
-            <Label htmlFor="openingBalance">Opening Balance (they owe us)</Label>
+            <Label htmlFor="openingBalance">
+              Opening Balance (they owe us)
+            </Label>
             <Input
               id="openingBalance"
               name="openingBalance"
@@ -129,7 +145,8 @@ export function CustomerForm({ customer, canAdjustOpeningBalance = false }: Prop
             />
             {customer && (
               <p className="text-xs text-slate-500">
-                Changing this affects the customer&apos;s historical balances and all related reports.
+                Changing this affects the customer&apos;s historical balances
+                and all related reports.
               </p>
             )}
           </div>
@@ -145,5 +162,5 @@ export function CustomerForm({ customer, canAdjustOpeningBalance = false }: Prop
         </Button>
       </div>
     </form>
-  )
+  );
 }

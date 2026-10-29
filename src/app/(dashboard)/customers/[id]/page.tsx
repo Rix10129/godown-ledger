@@ -33,6 +33,8 @@ const TYPE_LABELS: Record<string, string> = {
   WHOLESALER: "Wholesaler",
   GARMENT_UNIT: "Garment Unit",
   EXPORT_HOUSE: "Export House",
+  BUKRAM: "Bukram",
+  PRODUCTION_CLOTH: "Production Cloth",
 };
 
 const TYPE_VARIANTS: Record<
@@ -43,6 +45,8 @@ const TYPE_VARIANTS: Record<
   WHOLESALER: "info",
   GARMENT_UNIT: "success",
   EXPORT_HOUSE: "warning",
+  BUKRAM: "info",
+  PRODUCTION_CLOTH: "success",
 };
 
 export async function generateMetadata({ params }: Props) {
@@ -131,7 +135,9 @@ export default async function CustomerDetailPage({ params }: Props) {
     returns,
     corrections,
   });
-  const openingBal = balance.opening;
+  const openingBal = corrections.length
+    ? Number(corrections[0].oldAmount)
+    : balance.opening;
   const outstanding = balance.closingBalance;
   const totalNet = balance.invoiced;
   const totalPaid = balance.paid + balance.returned;

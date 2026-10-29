@@ -2,7 +2,13 @@ name: Quality
 
 on:
   push:
-    branches: [main, Production, client/textile-release-2026-10-20]
+    branches:
+      [
+        main,
+        Production,
+        client/textile-release-2026-10-20,
+        development/mars-workflows-20261029,
+      ]
   pull_request:
     branches: [main, Production, client/textile-release-2026-10-20]
 

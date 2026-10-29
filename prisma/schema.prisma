@@ -23,6 +23,8 @@ enum CustomerType {
   WHOLESALER
   GARMENT_UNIT
   EXPORT_HOUSE
+  BUKRAM
+  PRODUCTION_CLOTH
 }
 
 enum UnitType {
@@ -167,6 +169,12 @@ model Company {
   inventoryImports         InventoryImport[]
   inventoryOpeningStocks   InventoryOpeningStock[]
   invoiceDrafts            InvoiceDraft[]
+  customerOrders           CustomerOrder[]
+  productionUnits          ProductionUnit[]
+  productionJobs           ProductionJob[]
+  productionReceipts       ProductionReceipt[]
+  productionPayments       ProductionPayment[]
+  partyStockEntries        PartyStockEntry[]
 }
 
 // Transactional counters for human-readable business document numbers.
@@ -265,13 +273,15 @@ model Customer {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  route       Route?            @relation(fields: [routeId], references: [id])
-  invoices    SaleInvoice[]
-  saleReturns SaleReturn[]
-  payments    CustomerPayment[]
-  pdcCheques  PDCCheque[]
-  quotations  Quotation[]
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  route             Route?            @relation(fields: [routeId], references: [id])
+  invoices          SaleInvoice[]
+  saleReturns       SaleReturn[]
+  payments          CustomerPayment[]
+  pdcCheques        PDCCheque[]
+  quotations        Quotation[]
+  orders            CustomerOrder[]
+  partyStockEntries PartyStockEntry[]
 
   @@index([companyId])
   @@index([routeId])
@@ -322,6 +332,9 @@ model Product {
   saleReturnItems     SaleReturnItem[]
   purchaseReturnItems PurchaseReturnItem[]
   quotationItems      QuotationItem[]
+  orderItems          CustomerOrderItem[]
+  productionJobs      ProductionJob[]
+  partyStockEntries   PartyStockEntry[]
 
   @@index([companyId])
   @@index([companyId, isActive])
@@ -347,6 +360,10 @@ model ProductBatch {
 
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   product             Product              @relation(fields: [productId], references: [id])
+  isThaan             Boolean              @default(false)
+  productionReceiptId String?
+  productionReceipt   ProductionReceipt?   @relation(fields: [productionReceiptId], references: [id], onDelete: Restrict)
+  productionJobs      ProductionJob[]
   stockMovements      StockMovement[]
   invoiceItems        SaleInvoiceItem[]
   purchaseItems       PurchaseOrderItem[]
@@ -590,19 +607,21 @@ model InvoiceDraft {
 
 // batchId is required — every sale line must reference a specific batch for FEFO
 model SaleInvoiceItem {
-  id          String  @id @default(cuid())
+  orderItemId String?
+  orderItem   CustomerOrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  id          String             @id @default(cuid())
   invoiceId   String
   productId   String
   batchId     String
-  quantity    Decimal @db.Decimal(14, 3)
-  salePrice   Decimal @db.Decimal(12, 2)
-  discount    Decimal @default(0) @db.Decimal(12, 2)
-  taxRate     Decimal @default(0) @db.Decimal(5, 2)
+  quantity    Decimal            @db.Decimal(14, 3)
+  salePrice   Decimal            @db.Decimal(12, 2)
+  discount    Decimal            @default(0) @db.Decimal(12, 2)
+  taxRate     Decimal            @default(0) @db.Decimal(5, 2)
   // Scheme/bonus giveaway (e.g. "buy 10 get 1 free") — still deducts stock
   // via FEFO like any other line, but contributes zero to totalAmount/tax.
-  costPrice   Decimal @default(0) @db.Decimal(18, 8)
-  isBonus     Boolean @default(false)
-  totalAmount Decimal @db.Decimal(12, 2)
+  costPrice   Decimal            @default(0) @db.Decimal(18, 8)
+  isBonus     Boolean            @default(false)
+  totalAmount Decimal            @db.Decimal(12, 2)
 
   invoice SaleInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   product Product      @relation(fields: [productId], references: [id])
@@ -670,9 +689,10 @@ model CustomerPayment {
   reversalReason String?
   createdAt      DateTime       @default(now())
 
-  company  Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer Customer     @relation(fields: [customerId], references: [id])
-  invoice  SaleInvoice? @relation(fields: [invoiceId], references: [id])
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer      Customer     @relation(fields: [customerId], references: [id])
+  invoice       SaleInvoice? @relation(fields: [invoiceId], references: [id])
+  referenceBank String?
 
   @@index([companyId, paymentDate])
   @@index([customerId])
@@ -699,6 +719,7 @@ model SupplierPayment {
   company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   supplier      Supplier       @relation(fields: [supplierId], references: [id])
   purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  referenceBank String?
 
   @@index([companyId, paymentDate])
   @@index([supplierId])
@@ -1014,4 +1035,116 @@ model EveningDelivery {
   createdAt     DateTime  @default(now())
 
   @@unique([companyId, businessDate, channel])
+}
+
+model CustomerOrder {
+  id          String              @id @default(cuid())
+  companyId   String
+  customerId  String
+  orderNumber String
+  orderDate   DateTime            @default(now())
+  notes       String?
+  status      String              @default("OPEN")
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer    Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items       CustomerOrderItem[]
+
+  @@unique([companyId, orderNumber])
+}
+
+model CustomerOrderItem {
+  id           String            @id @default(cuid())
+  orderId      String
+  productId    String
+  quantity     Decimal           @db.Decimal(14, 3)
+  order        CustomerOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product      Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  invoiceItems SaleInvoiceItem[]
+
+  @@unique([orderId, productId])
+}
+
+model ProductionUnit {
+  id        String              @id @default(cuid())
+  companyId String
+  name      String
+  wageRate  Decimal             @db.Decimal(12, 2)
+  company   Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobs      ProductionJob[]
+  payments  ProductionPayment[]
+
+  @@unique([companyId, name])
+}
+
+model ProductionJob {
+  id                String              @id @default(cuid())
+  companyId         String
+  unitId            String
+  yarnBatchId       String
+  clothProductId    String
+  jobNumber         String
+  issuedQuantity    Decimal             @db.Decimal(14, 3)
+  consumedQuantity  Decimal             @default(0) @db.Decimal(14, 3)
+  returnedQuantity  Decimal             @default(0) @db.Decimal(14, 3)
+  allocatedYarnCost Decimal             @default(0) @db.Decimal(12, 2)
+  yarnUnitCost      Decimal             @db.Decimal(18, 8)
+  wageRate          Decimal             @db.Decimal(12, 2)
+  createdAt         DateTime            @default(now())
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  unit              ProductionUnit      @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  yarnBatch         ProductBatch        @relation(fields: [yarnBatchId], references: [id], onDelete: Restrict)
+  clothProduct      Product             @relation(fields: [clothProductId], references: [id], onDelete: Restrict)
+  receipts          ProductionReceipt[]
+
+  @@unique([companyId, jobNumber])
+}
+
+model ProductionReceipt {
+  id            String         @id @default(cuid())
+  companyId     String
+  jobId         String
+  receiptNumber String
+  meters        Decimal        @db.Decimal(14, 3)
+  yarnConsumed  Decimal        @db.Decimal(14, 3)
+  wages         Decimal        @db.Decimal(12, 2)
+  yarnCost      Decimal        @db.Decimal(12, 2)
+  receiptDate   DateTime       @default(now())
+  status        String         @default("POSTED")
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job           ProductionJob  @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  batches       ProductBatch[]
+
+  @@unique([companyId, receiptNumber])
+}
+
+model ProductionPayment {
+  id            String         @id @default(cuid())
+  companyId     String
+  unitId        String
+  amount        Decimal        @db.Decimal(12, 2)
+  paymentMode   PaymentMode
+  reference     String?
+  paymentDate   DateTime       @default(now())
+  status        String         @default("POSTED")
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  unit          ProductionUnit @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  referenceBank String?
+
+  @@index([companyId, unitId])
+}
+
+model PartyStockEntry {
+  id         String   @id @default(cuid())
+  companyId  String
+  customerId String
+  productId  String
+  quantity   Decimal  @db.Decimal(14, 3)
+  reference  String
+  notes      String?
+  createdAt  DateTime @default(now())
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, reference])
 }

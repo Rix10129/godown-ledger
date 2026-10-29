@@ -37,6 +37,7 @@ import { lineBase, calculateDocumentTotals } from "@/lib/invoice-math";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type BatchOption = {
+  isThaan?: boolean;
   id: string;
   batchNumber: string;
   expiryDate: string | null; // ISO string, null = doesn't expire (e.g. yarn/cloth)
@@ -60,6 +61,8 @@ export type CustomerOption = {
 };
 
 type LineItem = {
+  isThaan?: boolean;
+  orderItemId?: string;
   key: string;
   productId: string;
   productName: string;
@@ -106,6 +109,12 @@ interface EditContext {
 }
 
 interface InvoiceFormProps {
+  orderOptions?: Array<{
+    id: string;
+    customerId: string;
+    productId: string;
+    label: string;
+  }>;
   products: ProductOption[];
   customers: CustomerOption[];
   initialDraft?:
@@ -126,6 +135,7 @@ export function InvoiceForm({
   draftWarnings = [],
   drafts = [],
   editContext,
+  orderOptions = [],
 }: InvoiceFormProps) {
   const [lines, setLines] = useState<LineItem[]>(
     () =>
@@ -225,6 +235,7 @@ export function InvoiceForm({
       productId: product.id,
       productName: product.name,
       unit: product.unit,
+      isThaan: chosen.batch.isThaan,
       batchId: chosen.batch.id,
       batchNumber: chosen.batch.batchNumber,
       expiryDate: chosen.batch.expiryDate,
@@ -287,7 +298,11 @@ export function InvoiceForm({
 
       const take = Math.min(overflow, avail);
       const existingLine = result.find(
-        (l) => l.productId === line.productId && l.batchId === batch.id,
+        (l) =>
+          l.productId === line.productId &&
+          l.batchId === batch.id &&
+          l.orderItemId === line.orderItemId &&
+          l.isBonus === line.isBonus,
       );
       if (existingLine) {
         result = result.map((l) =>
@@ -305,6 +320,7 @@ export function InvoiceForm({
             productId: product.id,
             productName: product.name,
             unit: product.unit,
+            isThaan: batch.isThaan,
             batchId: batch.id,
             batchNumber: batch.batchNumber,
             expiryDate: batch.expiryDate,
@@ -315,6 +331,7 @@ export function InvoiceForm({
             discount: line.discount,
             taxRate: parseFloat(product.taxRate) || 0,
             isBonus: line.isBonus,
+            orderItemId: line.orderItemId,
             savedAvailable: batch.quantity,
             savedCatalogPrice: parseFloat(product.salePrice) || 0,
           },
@@ -400,6 +417,8 @@ export function InvoiceForm({
       discountAmount,
       notes,
       lines: lines.map((line) => ({
+        orderItemId: line.orderItemId,
+        isThaan: line.isThaan,
         productId: line.productId,
         productName: line.productName,
         unit: line.unit,
@@ -519,6 +538,7 @@ export function InvoiceForm({
         "linesJson",
         JSON.stringify(
           lines.map((l) => ({
+            orderItemId: l.orderItemId,
             productId: l.productId,
             batchId: l.batchId,
             quantity: l.quantity,
@@ -566,6 +586,7 @@ export function InvoiceForm({
       "linesJson",
       JSON.stringify(
         lines.map((l) => ({
+          orderItemId: l.orderItemId,
           productId: l.productId,
           batchId: l.batchId,
           quantity: l.quantity,
@@ -857,6 +878,20 @@ export function InvoiceForm({
           </div>
         )}
 
+        {lines.some((l) => l.isThaan) && (
+          <p className="text-sm">
+            Thaans used:{" "}
+            {new Set(lines.filter((l) => l.isThaan).map((l) => l.batchId)).size}{" "}
+            · Gazana:{" "}
+            {Number(
+              lines
+                .filter((l) => l.isThaan)
+                .reduce((n, l) => n + l.quantity, 0)
+                .toFixed(3),
+            )}{" "}
+            metres
+          </p>
+        )}
         {lines.length > 0 && (
           <div className="max-h-[42vh] overflow-auto rounded-xl border border-slate-200">
             <table className="w-full min-w-[720px] text-sm">
@@ -869,10 +904,10 @@ export function InvoiceForm({
                     Avail
                   </th>
                   <th className="text-right px-3 py-2.5 font-medium text-slate-600 w-24">
-                    Qty
+                    Quantity
                   </th>
                   <th className="text-right px-3 py-2.5 font-medium text-slate-600 w-32">
-                    Unit Price
+                    Per Unit Rate
                   </th>
                   <th className="text-right px-3 py-2.5 font-medium text-slate-600 w-20">
                     Disc%
@@ -910,6 +945,89 @@ export function InvoiceForm({
                         <p className="font-medium text-slate-900">
                           {line.productName}
                         </p>
+                        {line.unit === "METER" && (
+                          <p className="text-xs text-slate-500">
+                            Gazana (metres) · rate per metre
+                          </p>
+                        )}
+                        {!editContext && (
+                          <Select
+                            aria-label={`Customer order for ${line.productName}`}
+                            value={line.orderItemId ?? ""}
+                            onChange={(e) =>
+                              setLines((prev) =>
+                                prev.map((l) =>
+                                  l.key === line.key
+                                    ? {
+                                        ...l,
+                                        orderItemId:
+                                          e.target.value || undefined,
+                                      }
+                                    : l,
+                                ),
+                              )
+                            }
+                          >
+                            <option value="">No customer order</option>
+                            {orderOptions
+                              .filter(
+                                (o) =>
+                                  o.customerId === customerId &&
+                                  o.productId === line.productId,
+                              )
+                              .map((o) => (
+                                <option key={o.id} value={o.id}>
+                                  {o.label}
+                                </option>
+                              ))}
+                          </Select>
+                        )}
+                        {!editContext && (
+                          <Select
+                            aria-label={`Thaan / lot for ${line.productName}`}
+                            value={line.batchId}
+                            onChange={(e) => {
+                              const b = products
+                                .find((p) => p.id === line.productId)
+                                ?.batches.find((b) => b.id === e.target.value);
+                              if (!b) return;
+                              const available = batchAvailable(
+                                b.id,
+                                b.quantity,
+                                lines.filter((l) => l.key !== line.key),
+                              );
+                              setLines((prev) =>
+                                prev.map((l) =>
+                                  l.key === line.key
+                                    ? {
+                                        ...l,
+                                        batchId: b.id,
+                                        batchNumber: b.batchNumber,
+                                        isThaan: b.isThaan,
+                                        expiryDate: b.expiryDate,
+                                        maxQty: available,
+                                        quantity: Math.min(
+                                          l.quantity,
+                                          available,
+                                        ),
+                                        salePrice: Number(b.salePrice),
+                                      }
+                                    : l,
+                                ),
+                              );
+                            }}
+                          >
+                            {products
+                              .find((p) => p.id === line.productId)
+                              ?.batches.filter((b) => isSellableBatch(b))
+                              .map((b) => (
+                                <option key={b.id} value={b.id}>
+                                  {b.batchNumber} · {b.quantity} {line.unit}{" "}
+                                  available
+                                </option>
+                              ))}
+                          </Select>
+                        )}
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                             {line.batchNumber} · {line.unit}

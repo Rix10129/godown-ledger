@@ -515,3 +515,41 @@ export async function postPartyOpeningChange(
     ],
   );
 }
+
+export async function postProductionIssue(
+  tx: Tx,
+  p: Posting,
+  returned = false,
+) {
+  return post(
+    tx,
+    returned ? "PRODUCTION_YARN_RETURN" : "PRODUCTION_ISSUE",
+    p,
+    [{ account: returned ? "INVENTORY" : "PRODUCTION_WIP", amount: p.amount }],
+    [{ account: returned ? "PRODUCTION_WIP" : "INVENTORY", amount: p.amount }],
+  );
+}
+export async function postProductionReceipt(
+  tx: Tx,
+  p: Posting & { wages: Amount },
+) {
+  return post(
+    tx,
+    "PRODUCTION_RECEIPT",
+    p,
+    [{ account: "INVENTORY", amount: p.amount }],
+    [
+      { account: "PRODUCTION_WIP", amount: p.cost ?? 0 },
+      { account: "ACCOUNTS_PAYABLE", amount: p.wages },
+    ],
+  );
+}
+export async function postProductionPayment(tx: Tx, p: Posting) {
+  return post(
+    tx,
+    "PRODUCTION_PAYMENT",
+    p,
+    [{ account: "ACCOUNTS_PAYABLE", amount: p.amount }],
+    [{ account: funds(p.paymentMode, "out"), amount: p.amount }],
+  );
+}

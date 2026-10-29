@@ -1,4 +1,5 @@
 "use server";
+import { validateOrderDelivery } from "@/lib/mars-workflows";
 
 import Decimal from "decimal.js";
 import { validQuantity } from "@/lib/quantities";
@@ -414,6 +415,7 @@ export async function createSaleReturn(
 }
 
 type LineInput = {
+  orderItemId?: string;
   productId: string;
   batchId: string;
   quantity: number;
@@ -513,6 +515,7 @@ export async function createInvoice(
 
   try {
     await db.$transaction(async (tx) => {
+      await validateOrderDelivery(tx, companyId, customerId, lines);
       if (draftId) {
         const draft = await tx.invoiceDraft.findFirst({
           where: { id: draftId, companyId, userId },
@@ -668,6 +671,7 @@ export async function createInvoice(
         await tx.saleInvoiceItem.create({
           data: {
             invoiceId: invoice.id,
+            orderItemId: line.orderItemId || null,
             productId: line.productId,
             batchId: line.batchId,
             quantity: line.quantity,
@@ -792,6 +796,16 @@ export async function updateInvoice(
         include: { items: true, payments: true, returns: true },
       });
       if (!invoice) throw new Error("Invoice not found");
+      if (
+        invoice.items.some(
+          (i: { orderItemId?: string | null }) => i.orderItemId,
+        ) ||
+        lines.some((l) => l.orderItemId)
+      )
+        throw new Error(
+          "An order delivery must be reversed and re-entered to change its quantities or rates.",
+        );
+
       if (invoice.directDeal)
         throw new Error(
           "Use Sales → Direct deals to reverse a direct deal; it never returns stock.",

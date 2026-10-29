@@ -317,43 +317,13 @@ export async function adjustStock(
   delta: number,
   notes: string,
 ): Promise<void> {
-  await assertPermission("STOCK_ADJUST");
-  const companyId = await getCompanyId();
-
-  const batch = await db.productBatch.findFirst({
-    where: { id: batchId, companyId },
-  });
-  if (!batch) throw new Error("Batch not found");
-
-  const newQty = batch.quantity + delta;
-  if (newQty < 0) throw new Error("Adjustment would make stock negative");
-
-  await db.$transaction(async (tx) => {
-    await tx.productBatch.update({
-      where: { id: batchId },
-      data: { quantity: newQty },
-    });
-    const movement = await tx.stockMovement.create({
-      data: {
-        companyId,
-        productId,
-        batchId,
-        type: MovementType.ADJUSTMENT,
-        quantity: delta,
-        notes,
-      },
-    });
-    const unitCost = Number(batch.purchasePrice);
-    await postStockAdjustment(tx, {
-      companyId,
-      sourceId: movement.id,
-      number: movement.id,
-      date: movement.createdAt,
-      amount: Math.abs(delta) * unitCost,
-      increase: delta > 0,
-      description: notes || "Stock adjustment",
-    });
-  });
-
-  revalidatePath(`/inventory/${productId}`);
+  const form = new FormData();
+  form.set("productId", productId);
+  form.set("batchId", batchId);
+  form.set("direction", delta > 0 ? "add" : "subtract");
+  form.set("quantity", String(Math.abs(delta)));
+  form.set("notes", notes);
+  const { createStockAdjustment } = await import("./adjustments/actions");
+  const result = await createStockAdjustment(null, form);
+  if (result?.error) throw new Error(result.error);
 }

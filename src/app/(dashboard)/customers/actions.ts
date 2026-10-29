@@ -1,4 +1,5 @@
 "use server";
+import { saveError } from "@/lib/save-error";
 
 import { assertPermission } from "@/lib/authorization";
 
@@ -27,6 +28,8 @@ const VALID_TYPES = [
   "WHOLESALER",
   "GARMENT_UNIT",
   "EXPORT_HOUSE",
+  "BUKRAM",
+  "PRODUCTION_CLOTH",
 ] as const;
 const VALID_PAYMENT_MODES = ["CASH", "BANK", "CHEQUE", "CREDIT"] as const;
 
@@ -369,6 +372,8 @@ export async function recordPayment(
   const paymentModeRaw = (formData.get("paymentMode") as string) || "CASH";
   const paymentDate =
     (formData.get("paymentDate") as string) || new Date().toISOString();
+  const referenceBank =
+    (formData.get("referenceBank") as string)?.trim() || null;
   const reference = (formData.get("reference") as string)?.trim() || null;
   const notes = (formData.get("notes") as string)?.trim() || null;
 
@@ -428,6 +433,7 @@ export async function recordPayment(
           paymentMode: paymentModeRaw as PaymentMode,
           paymentDate: new Date(paymentDate),
           reference,
+          referenceBank,
           notes,
         },
       });
@@ -450,7 +456,7 @@ export async function recordPayment(
         });
     });
   } catch (e: any) {
-    return { error: e?.message ?? "Failed to record payment" };
+    return { error: saveError(e, "Failed to record payment") };
   }
 
   revalidatePath(`/customers/${customerId}`);

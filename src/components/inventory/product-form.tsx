@@ -153,7 +153,7 @@ export function ProductForm({ suppliers, product }: ProductFormProps) {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="purchasePrice">
-            Purchase Price (per {unit.toLowerCase()}) *
+            Purchase Price (per {unit.toLowerCase()})
           </Label>
           <Input
             id="purchasePrice"
@@ -161,14 +161,15 @@ export function ProductForm({ suppliers, product }: ProductFormProps) {
             type="number"
             min="0.01"
             step="0.01"
-            defaultValue={product?.purchasePrice ?? ""}
-            required
-            placeholder="0.00"
+            defaultValue={
+              Number(product?.purchasePrice) > 0 ? product?.purchasePrice : ""
+            }
+            placeholder="Optional — set when known"
           />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="salePrice">
-            Sale Price (per {unit.toLowerCase()}) *
+            Sale Price (per {unit.toLowerCase()})
           </Label>
           <Input
             id="salePrice"
@@ -176,9 +177,10 @@ export function ProductForm({ suppliers, product }: ProductFormProps) {
             type="number"
             min="0.01"
             step="0.01"
-            defaultValue={product?.salePrice ?? ""}
-            required
-            placeholder="0.00"
+            defaultValue={
+              Number(product?.salePrice) > 0 ? product?.salePrice : ""
+            }
+            placeholder="Optional — set when known"
           />
         </div>
         <div className="space-y-1.5">

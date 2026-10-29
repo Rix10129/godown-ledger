@@ -87,7 +87,31 @@ export async function dumpCompanyBackup(companyId: string) {
     db.inventoryOpeningStock.findMany({ where: { companyId } }),
     db.eveningDelivery.findMany({ where: { companyId } }),
   ]);
+  const [
+    customerOrders,
+    customerOrderItems,
+    productionUnits,
+    productionJobs,
+    productionReceipts,
+    productionPayments,
+    partyStockEntries,
+  ] = await Promise.all([
+    db.customerOrder.findMany({ where: { companyId } }),
+    db.customerOrderItem.findMany({ where: { order: { companyId } } }),
+    db.productionUnit.findMany({ where: { companyId } }),
+    db.productionJob.findMany({ where: { companyId } }),
+    db.productionReceipt.findMany({ where: { companyId } }),
+    db.productionPayment.findMany({ where: { companyId } }),
+    db.partyStockEntry.findMany({ where: { companyId } }),
+  ]);
   const data: BackupData = {
+    customerOrders,
+    customerOrderItems,
+    productionUnits,
+    productionJobs,
+    productionReceipts,
+    productionPayments,
+    partyStockEntries,
     company: [company],
     users,
     permissions: Object.entries(ROLE_PERMISSIONS).map(

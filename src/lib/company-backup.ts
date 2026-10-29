@@ -9,7 +9,7 @@ import {
 } from "node:crypto";
 
 export const BACKUP_SCHEMA = "godown-ledger.company-backup";
-export const BACKUP_SCHEMA_VERSION = 3;
+export const BACKUP_SCHEMA_VERSION = 4;
 export const BACKUP_KDF = "scrypt" as const;
 export const BACKUP_CIPHER = "aes-256-gcm" as const;
 
@@ -52,6 +52,13 @@ export const BACKUP_COLLECTIONS = [
   "inventoryImportRows",
   "inventoryOpeningStocks",
   "eveningDeliveries",
+  "customerOrders",
+  "customerOrderItems",
+  "productionUnits",
+  "productionJobs",
+  "productionReceipts",
+  "productionPayments",
+  "partyStockEntries",
 ] as const;
 
 export type BackupCollection = (typeof BACKUP_COLLECTIONS)[number];
@@ -123,11 +130,25 @@ export function verifyBackup(
     backup.manifest.schema !== BACKUP_SCHEMA
   )
     throw new Error("Unrecognised company backup format");
-  if (![2, BACKUP_SCHEMA_VERSION].includes(backup.manifest.schemaVersion))
+  if (![2, 3, BACKUP_SCHEMA_VERSION].includes(backup.manifest.schemaVersion))
     throw new Error(
       `Unsupported backup schema version ${backup.manifest.schemaVersion}`,
     );
   for (const name of BACKUP_COLLECTIONS) {
+    if (
+      backup.manifest.schemaVersion < 4 &&
+      [
+        "customerOrders",
+        "customerOrderItems",
+        "productionUnits",
+        "productionJobs",
+        "productionReceipts",
+        "productionPayments",
+        "partyStockEntries",
+      ].includes(name) &&
+      backup.data[name] === undefined
+    )
+      continue;
     if (
       backup.manifest.schemaVersion === 2 &&
       [
@@ -225,7 +246,9 @@ export function validateRestoredBackup(
   backup: PlainCompanyBackup,
 ): RestoreValidation {
   verifyBackup(backup);
-  const d = backup.data as Record<BackupCollection, Row[]>,
+  const d = Object.fromEntries(
+      BACKUP_COLLECTIONS.map((name) => [name, backup.data[name] ?? []]),
+    ) as Record<BackupCollection, Row[]>,
     errors: string[] = [];
   if (
     d.company.length !== 1 ||
@@ -257,6 +280,18 @@ export function validateRestoredBackup(
           `${children}.${field} references missing ${parents} record ${row[field]}`,
         );
   };
+  fk("customerOrders", "customerId", "customers");
+  fk("customerOrderItems", "orderId", "customerOrders");
+  fk("customerOrderItems", "productId", "products");
+  fk("invoiceItems", "orderItemId", "customerOrderItems", true);
+  fk("productionJobs", "unitId", "productionUnits");
+  fk("productionJobs", "yarnBatchId", "batches");
+  fk("productionJobs", "clothProductId", "products");
+  fk("productionReceipts", "jobId", "productionJobs");
+  fk("productionPayments", "unitId", "productionUnits");
+  fk("partyStockEntries", "customerId", "customers");
+  fk("partyStockEntries", "productId", "products");
+  fk("batches", "productionReceiptId", "productionReceipts", true);
   fk("products", "supplierId", "suppliers", true);
   fk("products", "categoryId", "categories", true);
   fk("batches", "productId", "products");
@@ -326,6 +361,41 @@ export function validateRestoredBackup(
           .reduce((n, r) => n + decimal(r.totalAmount), 0),
     ),
   );
+  for (const item of d.customerOrderItems) {
+    const delivered = d.invoiceItems
+      .filter(
+        (i) =>
+          i.orderItemId === item.id &&
+          d.invoices.some(
+            (inv) => inv.id === i.invoiceId && inv.status === "POSTED",
+          ),
+      )
+      .reduce((n, i) => n + decimal(i.quantity), 0);
+    if (delivered > decimal(item.quantity) + 0.000001)
+      errors.push(`Order ${item.id} is over-delivered`);
+  }
+  for (const job of d.productionJobs)
+    if (
+      decimal(job.consumedQuantity) + decimal(job.returnedQuantity) >
+      decimal(job.issuedQuantity) + 0.000001
+    )
+      errors.push(`Production job ${job.id} uses more yarn than issued`);
+  for (const unit of d.productionUnits) {
+    const wages = d.productionReceipts
+      .filter(
+        (r) =>
+          r.status === "POSTED" &&
+          d.productionJobs.some(
+            (j) => j.id === r.jobId && j.unitId === unit.id,
+          ),
+      )
+      .reduce((n, r) => n + decimal(r.wages), 0);
+    const paid = d.productionPayments
+      .filter((p) => p.unitId === unit.id && p.status === "POSTED")
+      .reduce((n, p) => n + decimal(p.amount), 0);
+    if (paid > wages + 0.005)
+      errors.push(`Production unit ${unit.id} has overpaid wages`);
+  }
   const checks = {
     checksum: true,
     foreignKeys: !errors.some((e) => e.includes("references missing")),

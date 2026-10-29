@@ -47,7 +47,9 @@ export default async function InvoiceDetailPage({ params }: Props) {
         items: {
           include: {
             product: { select: { name: true, unit: true } },
-            batch: { select: { batchNumber: true, expiryDate: true } },
+            batch: {
+              select: { batchNumber: true, expiryDate: true, isThaan: true },
+            },
           },
           orderBy: { id: "asc" },
         },
@@ -312,10 +314,10 @@ export default async function InvoiceDetailPage({ params }: Props) {
                     Product / Batch
                   </th>
                   <th className="text-right px-6 py-3 font-medium text-slate-600">
-                    Qty
+                    Quantity
                   </th>
                   <th className="text-right px-6 py-3 font-medium text-slate-600">
-                    Unit Price
+                    Per Unit Rate
                   </th>
                   {showDiscountColumn && (
                     <th className="text-right px-6 py-3 font-medium text-slate-600">
@@ -345,6 +347,7 @@ export default async function InvoiceDetailPage({ params }: Props) {
                         <div className="flex items-center gap-1.5 mt-0.5 print:hidden">
                           <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                             {item.batch.batchNumber}
+                            {item.batch.isThaan ? " · Thaan" : ""}
                           </span>
                           <ExpiryBadge
                             expiryDate={
@@ -363,7 +366,10 @@ export default async function InvoiceDetailPage({ params }: Props) {
                         )}
                       </td>
                       <td className="px-6 py-3 text-right text-slate-700">
-                        {item.quantity} {item.product.unit}
+                        {item.quantity}{" "}
+                        {item.product.unit === "METER"
+                          ? "Gazana (metres)"
+                          : item.product.unit}
                       </td>
                       <td className="px-6 py-3 text-right text-slate-700">
                         {formatCurrency(parseFloat(item.salePrice.toString()))}

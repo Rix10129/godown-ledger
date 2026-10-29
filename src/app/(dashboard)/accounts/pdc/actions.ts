@@ -1,4 +1,5 @@
 "use server";
+import { saveError } from "@/lib/save-error";
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
@@ -43,7 +44,7 @@ export async function createPDC(
     });
     id = result.id;
   } catch (e: any) {
-    return { error: e?.message ?? "Failed to create cheque record" };
+    return { error: saveError(e, "Failed to create cheque record") };
   }
 
   revalidatePath("/accounts/pdc");

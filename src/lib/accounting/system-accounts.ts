@@ -15,6 +15,11 @@ export const SYSTEM_ACCOUNTS = {
     type: AccountType.ASSET,
   },
   INVENTORY: { code: "1200", name: "Inventory", type: AccountType.ASSET },
+  PRODUCTION_WIP: {
+    code: "1250",
+    name: "Yarn at weaving units",
+    type: AccountType.ASSET,
+  },
   INPUT_TAX: { code: "1300", name: "Input Tax", type: AccountType.ASSET },
   ACCOUNTS_PAYABLE: {
     code: "2000",

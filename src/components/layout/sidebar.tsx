@@ -22,6 +22,8 @@ const groups = [
     title: "Godown & mills",
     items: [
       { href: "/godown", label: "Godown stock" },
+      { href: "/stock", label: "Stock — mill, production & party" },
+      { href: "/stock/production", label: "Production & weaving wages" },
       { href: "/mills", label: "Mills" },
       { href: "/inventory", label: "Cloth products & lots" },
       { href: "/receipts", label: "Price received cloth" },
@@ -34,6 +36,7 @@ const groups = [
     title: "Bills & recovery",
     items: [
       { href: "/sales", label: "Sales bills" },
+      { href: "/sales/orders", label: "Customer orders" },
       { href: "/reports/recovery", label: "Recovery" },
       { href: "/customers", label: "Buyers" },
       { href: "/sales/direct", label: "Direct deals" },

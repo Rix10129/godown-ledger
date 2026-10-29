@@ -1,4 +1,5 @@
 "use server";
+import { saveError } from "@/lib/save-error";
 
 import { assertPermission } from "@/lib/authorization";
 
@@ -49,6 +50,7 @@ function paymentFields(formData: FormData) {
     purchaseOrderId:
       String(formData.get("purchaseOrderId") || "").trim() || null,
     reference: String(formData.get("reference") || "").trim() || null,
+    referenceBank: String(formData.get("referenceBank") || "").trim() || null,
     notes: String(formData.get("notes") || "").trim() || null,
   };
 }
@@ -88,30 +90,36 @@ export async function recordSupplierPayment(
   if (fields.purchaseOrderId && !purchase)
     return { error: "Purchase order does not belong to this supplier" };
 
-  const payment = await db.$transaction(async (tx) => {
-    const created = await tx.supplierPayment.create({
-      data: {
-        status: "POSTED",
+  let payment: { id: string };
+  try {
+    payment = await db.$transaction(async (tx) => {
+      const created = await tx.supplierPayment.create({
+        data: {
+          status: "POSTED",
+          companyId,
+          supplierId,
+          amount: fields.amount,
+          paymentMode: fields.paymentMode as PaymentMode,
+          paymentDate: fields.paymentDate,
+          purchaseOrderId: fields.purchaseOrderId,
+          reference: fields.reference,
+          referenceBank: fields.referenceBank,
+          notes: fields.notes,
+        },
+      });
+      await postSupplierPayment(tx, {
         companyId,
-        supplierId,
-        amount: fields.amount,
-        paymentMode: fields.paymentMode as PaymentMode,
-        paymentDate: fields.paymentDate,
-        purchaseOrderId: fields.purchaseOrderId,
-        reference: fields.reference,
-        notes: fields.notes,
-      },
+        sourceId: created.id,
+        number: created.id,
+        date: created.paymentDate,
+        amount: created.amount,
+        paymentMode: created.paymentMode,
+      });
+      return created;
     });
-    await postSupplierPayment(tx, {
-      companyId,
-      sourceId: created.id,
-      number: created.id,
-      date: created.paymentDate,
-      amount: created.amount,
-      paymentMode: created.paymentMode,
-    });
-    return created;
-  });
+  } catch (error) {
+    return { error: saveError(error) };
+  }
   await writeAuditLog({
     companyId,
     userId: user.id,
@@ -164,32 +172,36 @@ export async function updateSupplierPayment(
     existing.paymentMode !== fields.paymentMode ||
     existing.paymentDate.getTime() !== fields.paymentDate.getTime();
 
-  await db.$transaction(async (tx) => {
-    await tx.supplierPayment.update({
-      where: { id },
-      data: { ...fields, paymentMode: fields.paymentMode as PaymentMode },
-    });
-    // The ledger entry posted when this payment was recorded reflects the
-    // OLD amount/mode/date — if those changed, it must be reversed and
-    // reposted, or payables/cash balances would silently go stale.
-    if (financialsChanged) {
-      await repostSupplierPayment(
-        tx,
-        companyId,
-        id,
-        `Supplier payment edited — amount or mode corrected`,
-        new Date(),
-        {
+  try {
+    await db.$transaction(async (tx) => {
+      await tx.supplierPayment.update({
+        where: { id },
+        data: { ...fields, paymentMode: fields.paymentMode as PaymentMode },
+      });
+      // The ledger entry posted when this payment was recorded reflects the
+      // OLD amount/mode/date — if those changed, it must be reversed and
+      // reposted, or payables/cash balances would silently go stale.
+      if (financialsChanged) {
+        await repostSupplierPayment(
+          tx,
           companyId,
-          sourceId: id,
-          number: id,
-          date: fields.paymentDate,
-          amount: fields.amount,
-          paymentMode: fields.paymentMode as PaymentMode,
-        },
-      );
-    }
-  });
+          id,
+          `Supplier payment edited — amount or mode corrected`,
+          new Date(),
+          {
+            companyId,
+            sourceId: id,
+            number: id,
+            date: fields.paymentDate,
+            amount: fields.amount,
+            paymentMode: fields.paymentMode as PaymentMode,
+          },
+        );
+      }
+    });
+  } catch (error) {
+    return { error: saveError(error) };
+  }
   await writeAuditLog({
     companyId,
     userId: user.id,

@@ -10,6 +10,13 @@ import {
 } from "../src/lib/company-backup";
 
 const models: Partial<Record<BackupCollection, string>> = {
+  customerOrders: "customerOrder",
+  customerOrderItems: "customerOrderItem",
+  productionUnits: "productionUnit",
+  productionJobs: "productionJob",
+  productionReceipts: "productionReceipt",
+  productionPayments: "productionPayment",
+  partyStockEntries: "partyStockEntry",
   company: "company",
   users: "user",
   documentSequences: "documentSequence",
@@ -56,6 +63,13 @@ const order: BackupCollection[] = [
   "categories",
   "products",
   "batches",
+  "customerOrders",
+  "customerOrderItems",
+  "productionUnits",
+  "productionJobs",
+  "productionReceipts",
+  "productionPayments",
+  "partyStockEntries",
   "purchases",
   "purchaseItems",
   "purchaseReturns",
@@ -121,6 +135,7 @@ async function main() {
           throw new Error(
             "Target contains data. Refusing to overwrite or merge an existing installation.",
           );
+        await tx.$executeRaw`SELECT set_config('app.restoring_backup', 'on', true)`;
         for (const collection of order) {
           const name = models[collection]!;
           const model = Prisma.dmmf.datamodel.models.find(
@@ -155,6 +170,7 @@ async function main() {
             if (collection === "journalEntries") row.reversesEntryId = null;
             if (collection === "accounts") row.parentId = null;
             if (collection === "customers") row.routeId = null;
+            if (collection === "batches") row.productionReceiptId = null;
             const delegate = (
               tx as unknown as Record<
                 string,
@@ -164,6 +180,15 @@ async function main() {
             await delegate.create({ data: row });
           }
         }
+        for (const row of backup.data.batches as Record<string, unknown>[])
+          if (row.productionReceiptId)
+            await tx.productBatch.update({
+              where: { id: String(row.id) },
+              data: {
+                productionReceiptId: String(row.productionReceiptId),
+                updatedAt: new Date(String(row.updatedAt)),
+              },
+            });
         // Resolve self references after all parent records have been created.
         for (const row of backup.data.accounts as Record<string, unknown>[])
           if (row.parentId)
@@ -175,7 +200,10 @@ async function main() {
           if (row.routeId)
             await tx.customer.update({
               where: { id: String(row.id) },
-              data: { routeId: String(row.routeId) },
+              data: {
+                routeId: String(row.routeId),
+                updatedAt: new Date(String(row.updatedAt)),
+              },
             });
         for (const row of backup.data.journalEntries as Record<
           string,

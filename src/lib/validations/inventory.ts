@@ -10,10 +10,8 @@ export const productSchema = z.object({
   unit: z.string().min(1, "Unit is required"),
   subUnit: z.string().optional(),
   unitsPerPack: z.coerce.number().int().positive().optional(),
-  salePrice: z.coerce.number().positive("Sale price must be greater than 0"),
-  purchasePrice: z.coerce
-    .number()
-    .positive("Purchase price must be greater than 0"),
+  salePrice: z.coerce.number().min(0).default(0),
+  purchasePrice: z.coerce.number().min(0).default(0),
   reorderLevel: z.coerce.number().int().min(0).default(10),
   taxRate: z.coerce.number().min(0).max(100).default(0),
   description: z.string().optional(),

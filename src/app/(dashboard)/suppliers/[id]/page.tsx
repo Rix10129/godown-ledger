@@ -1,37 +1,46 @@
-import { db } from "@/lib/db"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { redirect, notFound } from "next/navigation"
-import Link from "next/link"
-import { ChevronLeft, Pencil, Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteSupplier } from "@/app/(dashboard)/suppliers/actions"
-import { formatCurrency, formatDate } from "@/lib/utils"
-import { calculatePurchaseBalance, calculateSupplierBalance } from "@/lib/supplier-ledger"
-import { SupplierPaymentControls, SupplierPaymentForm } from "@/components/suppliers/payment-form"
+import { db } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect, notFound } from "next/navigation";
+import Link from "next/link";
+import { ChevronLeft, Pencil, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { DeleteButton } from "@/components/ui/delete-button";
+import { deleteSupplier } from "@/app/(dashboard)/suppliers/actions";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import {
+  calculatePurchaseBalance,
+  calculateSupplierBalance,
+} from "@/lib/supplier-ledger";
+import {
+  SupplierPaymentControls,
+  SupplierPaymentForm,
+} from "@/components/suppliers/payment-form";
 
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
 interface Props {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string }>;
 }
 
 export async function generateMetadata({ params }: Props) {
-  const { id } = await params
-  const s = await db.supplier.findUnique({ where: { id }, select: { name: true } })
-  return { title: s?.name ?? "Supplier" }
+  const { id } = await params;
+  const s = await db.supplier.findUnique({
+    where: { id },
+    select: { name: true },
+  });
+  return { title: s?.name ?? "Supplier" };
 }
 
 export default async function SupplierDetailPage({ params }: Props) {
-  const { id } = await params
+  const { id } = await params;
 
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/login")
-  const companyId = (session.user as any).companyId as string
-  const role = (session.user as any).role as string
-  const canManagePayments = role === "OWNER" || role === "ADMIN"
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+  const companyId = (session.user as any).companyId as string;
+  const role = (session.user as any).role as string;
+  const canManagePayments = role === "OWNER" || role === "ADMIN";
 
   const supplier = await db.supplier.findFirst({
     where: { id, companyId },
@@ -49,30 +58,51 @@ export default async function SupplierDetailPage({ params }: Props) {
           payments: { select: { amount: true, isVoided: true } },
         },
       },
-      payments: { where: { status: "POSTED" }, orderBy: { paymentDate: "desc" } },
-      purchaseReturns: { where: { status: "POSTED" }, select: { totalAmount: true } },
+      payments: {
+        where: { status: "POSTED" },
+        orderBy: { paymentDate: "desc" },
+      },
+      purchaseReturns: {
+        where: { status: "POSTED" },
+        select: { totalAmount: true },
+      },
     },
-  })
+  });
 
-  if (!supplier) notFound()
+  if (!supplier) notFound();
 
-  const balance = calculateSupplierBalance({ openingBalance: supplier.openingBalance,
-    purchases: supplier.purchases, payments: supplier.payments, returns: supplier.purchaseReturns })
-  const purchaseOptions = supplier.purchases.map(po => ({ id: po.id, poNumber: po.poNumber,
-    balance: calculatePurchaseBalance(po, po.payments) })).filter(po => po.balance > 0.001)
+  const balance = calculateSupplierBalance({
+    openingBalance: supplier.openingBalance,
+    purchases: supplier.purchases,
+    payments: supplier.payments,
+    returns: supplier.purchaseReturns,
+  });
+  const purchaseOptions = supplier.purchases
+    .map((po) => ({
+      id: po.id,
+      poNumber: po.poNumber,
+      balance: calculatePurchaseBalance(po, po.payments),
+    }))
+    .filter((po) => po.balance > 0.001);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/suppliers" className="text-slate-400 hover:text-slate-600 transition-colors">
+          <Link
+            href="/suppliers"
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+          >
             <ChevronLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">{supplier.name}</h1>
+            <h1 className="text-xl font-bold text-slate-900">
+              {supplier.name}
+            </h1>
             <p className="text-sm text-slate-500">
-              {supplier.purchases.length} purchase order{supplier.purchases.length !== 1 ? "s" : ""}
+              {supplier.purchases.length} purchase order
+              {supplier.purchases.length !== 1 ? "s" : ""}
             </p>
           </div>
         </div>
@@ -98,12 +128,17 @@ export default async function SupplierDetailPage({ params }: Props) {
         </div>
       </div>
 
-      <SupplierPaymentForm supplierId={supplier.id} purchases={purchaseOptions} />
+      <SupplierPaymentForm
+        supplierId={supplier.id}
+        purchases={purchaseOptions}
+      />
 
       {/* Info + balance cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-3">Contact Details</h2>
+          <h2 className="text-sm font-semibold text-slate-900 mb-3">
+            Contact Details
+          </h2>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
             <dt className="text-slate-500">Phone</dt>
             <dd className="text-slate-800">{supplier.phone ?? "—"}</dd>
@@ -117,11 +152,15 @@ export default async function SupplierDetailPage({ params }: Props) {
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-slate-900">Account Summary</h2>
+          <h2 className="text-sm font-semibold text-slate-900">
+            Account Summary
+          </h2>
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between text-slate-600">
               <span>Opening Balance</span>
-              <span>{formatCurrency(parseFloat(supplier.openingBalance.toString()))}</span>
+              <span>
+                {formatCurrency(parseFloat(supplier.openingBalance.toString()))}
+              </span>
             </div>
             <div className="flex justify-between text-slate-600">
               <span>Total Purchases</span>
@@ -141,8 +180,16 @@ export default async function SupplierDetailPage({ params }: Props) {
             </div>
             <div className="border-t border-slate-200 pt-2 flex justify-between font-semibold">
               <span className="text-slate-900">Outstanding</span>
-              <span className={balance.closingBalance > 0.001 ? "text-red-600" : "text-green-600"}>
-                {balance.closingBalance > 0.001 ? formatCurrency(balance.closingBalance) : "—"}
+              <span
+                className={
+                  balance.closingBalance > 0.001
+                    ? "text-red-600"
+                    : "text-green-600"
+                }
+              >
+                {balance.closingBalance > 0.001
+                  ? formatCurrency(balance.closingBalance)
+                  : "—"}
               </span>
             </div>
           </div>
@@ -152,7 +199,9 @@ export default async function SupplierDetailPage({ params }: Props) {
       {/* Purchase history */}
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-sm font-semibold text-slate-900">Purchase Orders</h2>
+          <h2 className="text-sm font-semibold text-slate-900">
+            Purchase Orders
+          </h2>
         </div>
         {supplier.purchases.length === 0 ? (
           <div className="py-12 text-center">
@@ -162,21 +211,37 @@ export default async function SupplierDetailPage({ params }: Props) {
           <table className="w-full text-sm">
             <thead className="border-b border-slate-200">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">PO #</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">Date</th>
-                <th className="text-right px-4 py-3 font-medium text-slate-600">Net Amount</th>
-                <th className="text-right px-4 py-3 font-medium text-slate-600">Paid</th>
-                <th className="text-right px-4 py-3 font-medium text-slate-600">Balance</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">
+                  PO #
+                </th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">
+                  Date
+                </th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">
+                  Net Amount
+                </th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">
+                  Paid
+                </th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">
+                  Balance
+                </th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">
+                  Status
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {supplier.purchases.map((po) => {
-                const net = parseFloat(po.netAmount.toString())
-                const paid = parseFloat(po.paidAmount.toString()) + po.payments.filter(p => !p.isVoided).reduce((sum, p) => sum + Number(p.amount), 0)
-                const bal = calculatePurchaseBalance(po, po.payments)
-                const isPaid = bal <= 0.001
-                const isPartial = !isPaid && paid > 0.001
+                const net = parseFloat(po.netAmount.toString());
+                const paid =
+                  parseFloat(po.paidAmount.toString()) +
+                  po.payments
+                    .filter((p) => !p.isVoided)
+                    .reduce((sum, p) => sum + Number(p.amount), 0);
+                const bal = calculatePurchaseBalance(po, po.payments);
+                const isPaid = bal <= 0.001;
+                const isPartial = !isPaid && paid > 0.001;
                 return (
                   <tr key={po.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
@@ -187,7 +252,9 @@ export default async function SupplierDetailPage({ params }: Props) {
                         {po.poNumber}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{formatDate(po.orderDate)}</td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {formatDate(po.orderDate)}
+                    </td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-900">
                       {formatCurrency(net)}
                     </td>
@@ -198,7 +265,9 @@ export default async function SupplierDetailPage({ params }: Props) {
                       {isPaid ? (
                         <span className="text-green-600">—</span>
                       ) : (
-                        <span className="font-semibold text-red-600">{formatCurrency(bal)}</span>
+                        <span className="font-semibold text-red-600">
+                          {formatCurrency(bal)}
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -211,7 +280,7 @@ export default async function SupplierDetailPage({ params }: Props) {
                       )}
                     </td>
                   </tr>
-                )
+                );
               })}
             </tbody>
           </table>
@@ -219,13 +288,58 @@ export default async function SupplierDetailPage({ params }: Props) {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="px-4 py-3 border-b bg-slate-50"><h2 className="text-sm font-semibold">Supplier Payments</h2></div>
-        {supplier.payments.length === 0 ? <p className="p-8 text-center text-sm text-slate-400">No later payments recorded</p> :
-          <div className="divide-y">{supplier.payments.map(payment => <div key={payment.id} className={`p-4 ${payment.isVoided ? "opacity-50 bg-slate-50" : ""}`}>
-            <div className="flex items-start justify-between gap-4"><div><p className="font-semibold">{formatCurrency(Number(payment.amount))} <span className="text-xs font-normal text-slate-500">via {payment.paymentMode}</span></p><p className="text-xs text-slate-500">{formatDate(payment.paymentDate)}{payment.reference ? ` · ${payment.reference}` : ""}{payment.notes ? ` · ${payment.notes}` : ""}</p>{payment.isVoided && <Badge variant="danger">Voided</Badge>}</div>
-              {canManagePayments && !payment.isVoided && <SupplierPaymentControls purchases={purchaseOptions} payment={{ id: payment.id, amount: payment.amount.toString(), paymentMode: payment.paymentMode, paymentDate: payment.paymentDate.toISOString().slice(0, 10), purchaseOrderId: payment.purchaseOrderId, reference: payment.reference, notes: payment.notes }} />}
-            </div></div>)}</div>}
+        <div className="px-4 py-3 border-b bg-slate-50">
+          <h2 className="text-sm font-semibold">Supplier Payments</h2>
+        </div>
+        {supplier.payments.length === 0 ? (
+          <p className="p-8 text-center text-sm text-slate-400">
+            No later payments recorded
+          </p>
+        ) : (
+          <div className="divide-y">
+            {supplier.payments.map((payment) => (
+              <div
+                key={payment.id}
+                className={`p-4 ${payment.isVoided ? "opacity-50 bg-slate-50" : ""}`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold">
+                      {formatCurrency(Number(payment.amount))}{" "}
+                      <span className="text-xs font-normal text-slate-500">
+                        via {payment.paymentMode}
+                      </span>
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {formatDate(payment.paymentDate)}
+                      {payment.reference ? ` · ${payment.reference}` : ""}
+                      {payment.notes ? ` · ${payment.notes}` : ""}
+                    </p>
+                    {payment.isVoided && <Badge variant="danger">Voided</Badge>}
+                  </div>
+                  {canManagePayments && !payment.isVoided && (
+                    <SupplierPaymentControls
+                      purchases={purchaseOptions}
+                      payment={{
+                        id: payment.id,
+                        amount: payment.amount.toString(),
+                        paymentMode: payment.paymentMode,
+                        paymentDate: payment.paymentDate
+                          .toISOString()
+                          .slice(0, 10),
+                        purchaseOrderId: payment.purchaseOrderId,
+                        reference: payment.reference,
+                        referenceBank: payment.referenceBank,
+                        notes: payment.notes,
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
-  )
+  );
 }
