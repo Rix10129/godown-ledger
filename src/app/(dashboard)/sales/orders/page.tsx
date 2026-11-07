@@ -10,16 +10,11 @@ export default async function OrdersPage() {
   const auth = await authorize("SALE_CREATE");
   if (!auth.ok) redirect("/desk");
   const companyId = auth.actor.companyId;
-  const [customers, products, orders] = await Promise.all([
+  const [customers, orders] = await Promise.all([
     db.customer.findMany({
       where: { companyId },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
-    }),
-    db.product.findMany({
-      where: { companyId, isActive: true },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, unit: true },
     }),
     db.customerOrder.findMany({
       where: { companyId },
@@ -46,8 +41,9 @@ export default async function OrdersPage() {
       <h1 className="text-2xl font-semibold">Customer orders</h1>
       <p>
         Track each quality / colour separately. Orders do not post stock or
-        money. Add a product to a sales bill and select its customer order to
-        record a delivery.
+        money. Type the quality and unit. Sales bills automatically deliver
+        against the oldest pending orders for the same customer and quality
+        (FIFO).
       </p>
       <WorkflowForm action={createOrder} label="Create customer order">
         <h2 className="font-semibold">New order</h2>
@@ -62,7 +58,7 @@ export default async function OrdersPage() {
             ))}
           </select>
         </label>
-        <OrderLines products={products} />
+        <OrderLines />
         <label className="block">
           Notes
           <input name="notes" />

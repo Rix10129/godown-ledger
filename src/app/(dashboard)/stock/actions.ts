@@ -55,13 +55,14 @@ async function perform(
   return { success: "Saved successfully" };
 }
 export async function createOrder(_: WorkflowState, f: FormData) {
-  return perform("SALE_CREATE", (companyId) =>
+  return perform("SALE_CREATE", async (companyId) =>
     createCustomerOrder(
       companyId,
       text(f, "customerId"),
       JSON.parse(text(f, "linesJson")),
       text(f, "notes"),
       requestId(f),
+      (await authorize("MASTER_CREATE")).ok,
     ),
   );
 }

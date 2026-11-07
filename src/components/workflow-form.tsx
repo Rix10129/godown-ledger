@@ -44,21 +44,13 @@ export function WorkflowForm({
     </form>
   );
 }
-export function OrderLines({
-  products,
-}: {
-  products: { id: string; name: string; unit: string }[];
-}) {
-  return <OrderRows products={products} />;
+export function OrderLines() {
+  return <OrderRows />;
 }
 import { useState } from "react";
-function OrderRows({
-  products,
-}: {
-  products: { id: string; name: string; unit: string }[];
-}) {
+function OrderRows() {
   const [rows, setRows] = useState([
-    { key: 0, productId: "", quantity: "", rate: "" },
+    { key: 0, name: "", unit: "BAG", quantity: "", rate: "" },
   ]);
   return (
     <div className="space-y-2">
@@ -66,8 +58,9 @@ function OrderRows({
         type="hidden"
         name="linesJson"
         value={JSON.stringify(
-          rows.map(({ productId, quantity, rate }) => ({
-            productId,
+          rows.map(({ name, unit, quantity, rate }) => ({
+            name,
+            unit,
             quantity,
             rate,
           })),
@@ -75,28 +68,43 @@ function OrderRows({
       />
       {rows.map((r, i) => (
         <div
-          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_auto]"
+          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,0.4fr)_auto]"
           key={r.key}
         >
-          <select
-            required
-            aria-label="Quality / colour"
-            value={r.productId}
-            onChange={(e) =>
-              setRows(
-                rows.map((v, k) =>
-                  k === i ? { ...v, productId: e.target.value } : v,
-                ),
-              )
-            }
-          >
-            <option value="">Select quality / colour</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.unit})
-              </option>
-            ))}
-          </select>
+          <label>
+            Quality / colour
+            <input
+              required
+              aria-label="Quality / colour"
+              placeholder="Type bag or cloth quality"
+              value={r.name}
+              onChange={(e) =>
+                setRows(
+                  rows.map((v, k) =>
+                    k === i ? { ...v, name: e.target.value } : v,
+                  ),
+                )
+              }
+            />
+          </label>
+          <label>
+            Unit
+            <select
+              aria-label="Order unit"
+              value={r.unit}
+              onChange={(e) =>
+                setRows(
+                  rows.map((v, k) =>
+                    k === i ? { ...v, unit: e.target.value } : v,
+                  ),
+                )
+              }
+            >
+              <option value="BAG">BAG</option>
+              <option value="METER">METER</option>
+              <option value="KG">KG</option>
+            </select>
+          </label>
           <input
             aria-label="Ordered quantity"
             placeholder="Ordered quantity"
@@ -147,7 +155,7 @@ function OrderRows({
         onClick={() =>
           setRows([
             ...rows,
-            { key: Date.now(), productId: "", quantity: "", rate: "" },
+            { key: Date.now(), name: "", unit: "BAG", quantity: "", rate: "" },
           ])
         }
       >
