@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+import { formatCurrency } from "@/lib/utils";
 import { getActiveSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
@@ -94,6 +96,15 @@ export default async function GodownPage({
   ]);
   const bookkeeper = session.user.role === "ACCOUNTANT";
   const canManageProducts = ["OWNER", "ACCOUNTANT"].includes(session.user.role);
+  const costs = canManageProducts
+    ? await db.productBatch.findMany({
+        where: { companyId, id: { in: lots.map((lot) => lot.id) } },
+        select: { id: true, purchasePrice: true },
+      })
+    : [];
+  const costsById = new Map(
+    costs.map((lot) => [lot.id, lot.purchasePrice.toString()]),
+  );
   return (
     <div className="space-y-6">
       <OfficeHeading
@@ -174,7 +185,13 @@ export default async function GodownPage({
             </div>
           )}
           <div className="office-panel-body">
-            <ClothReceiptForm mills={mills} products={products} />
+            <ClothReceiptForm
+              initialRequestKey={crypto.randomUUID()}
+              mills={mills}
+              products={products.filter((p) => p.unit !== "BAG")}
+              canCreateProducts={canManageProducts}
+              canPrice={session.user.role === "OWNER"}
+            />
           </div>
         </section>
       )}
@@ -184,16 +201,13 @@ export default async function GodownPage({
             <h2>Bags received</h2>
           </div>
           <div className="office-panel-body">
-            {!products.some((p) => p.unit === "BAG") && (
-              <p className="office-note mb-4">
-                Add a product with the BAG unit under Cloth products &amp; lots
-                first.
-              </p>
-            )}
             <ClothReceiptForm
+              initialRequestKey={crypto.randomUUID()}
               mills={mills}
               products={products.filter((p) => p.unit === "BAG")}
               kind="bags"
+              canCreateProducts={canManageProducts}
+              canPrice={session.user.role === "OWNER"}
             />
           </div>
         </section>
@@ -209,10 +223,16 @@ export default async function GodownPage({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200">
-                <th className="px-5 py-3">Cloth</th>
+                <th className="px-5 py-3">Product</th>
                 <th className="px-4 py-3">Lot / thaan</th>
                 <th className="px-4 py-3">Mill</th>
                 <th className="px-5 py-3 text-right">Quantity</th>
+                {canManageProducts && (
+                  <>
+                    <th className="px-4 py-3 text-right">Purchase rate</th>
+                    <th className="px-4 py-3 text-right">Stock cost</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -236,6 +256,21 @@ export default async function GodownPage({
                       {l.product.unit}
                     </span>
                   </td>
+                  {canManageProducts && (
+                    <>
+                      <td className="px-4 py-4 text-right">
+                        {formatCurrency(costsById.get(l.id) ?? "0")} /{" "}
+                        {l.product.unit}
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        {formatCurrency(
+                          new Decimal(costsById.get(l.id) ?? "0")
+                            .times(l.quantity)
+                            .toFixed(2),
+                        )}
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

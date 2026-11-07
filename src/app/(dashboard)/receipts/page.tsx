@@ -24,15 +24,15 @@ export default async function ReceiptsPage() {
     <div className="space-y-6">
       <OfficeHeading
         kicker="02 / Godown & mills"
-        title="Cloth waiting for pricing"
+        title="Receipts waiting for pricing"
         action={
           <Link href="/godown" className="office-button-quiet">
             View stock
           </Link>
         }
       >
-        Review each delivery, add its rates, and post it to stock and the mill’s
-        account.
+        Review each delivery, add its purchase rate, and post it to stock and
+        the mill’s account.
       </OfficeHeading>
       {receipts.map((r) => (
         <section className="office-panel" key={r.id}>
@@ -61,7 +61,7 @@ export default async function ReceiptsPage() {
       ))}
       {!receipts.length && (
         <section className="office-panel">
-          <EmptyState title="All received cloth has been priced">
+          <EmptyState title="All receipts have been priced">
             Any new receipt saved by the keeper will appear here for your
             review.
           </EmptyState>
