@@ -114,6 +114,7 @@ interface InvoiceFormProps {
     customerId: string;
     productId: string;
     label: string;
+    rate: number | null;
   }>;
   products: ProductOption[];
   customers: CustomerOption[];
@@ -327,7 +328,10 @@ export function InvoiceForm({
             maxQty: avail,
             quantity: take,
             salePrice:
-              parseFloat(batch.salePrice) || parseFloat(product.salePrice) || 0,
+              orderOptions.find((o) => o.id === line.orderItemId)?.rate ??
+              (parseFloat(batch.salePrice) ||
+                parseFloat(product.salePrice) ||
+                0),
             discount: line.discount,
             taxRate: parseFloat(product.taxRate) || 0,
             isBonus: line.isBonus,
@@ -962,6 +966,17 @@ export function InvoiceForm({
                                         ...l,
                                         orderItemId:
                                           e.target.value || undefined,
+                                        salePrice:
+                                          orderOptions.find(
+                                            (o) => o.id === e.target.value,
+                                          )?.rate ??
+                                          Number(
+                                            products
+                                              .find((p) => p.id === l.productId)
+                                              ?.batches.find(
+                                                (b) => b.id === l.batchId,
+                                              )?.salePrice ?? l.salePrice,
+                                          ),
                                       }
                                     : l,
                                 ),
@@ -1010,7 +1025,10 @@ export function InvoiceForm({
                                           l.quantity,
                                           available,
                                         ),
-                                        salePrice: Number(b.salePrice),
+                                        salePrice:
+                                          orderOptions.find(
+                                            (o) => o.id === l.orderItemId,
+                                          )?.rate ?? Number(b.salePrice),
                                       }
                                     : l,
                                 ),

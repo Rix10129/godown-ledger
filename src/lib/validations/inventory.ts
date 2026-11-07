@@ -27,8 +27,12 @@ export const batchSchema = z.object({
   expiryDate: z.string().optional(),
   purchasePrice: z.coerce
     .number()
-    .positive("Purchase price must be greater than 0"),
-  salePrice: z.coerce.number().positive("Sale price must be greater than 0"),
+    .positive("Purchase price must be greater than 0")
+    .optional(),
+  salePrice: z.coerce
+    .number()
+    .positive("Sale price must be greater than 0")
+    .optional(),
   quantity: z.coerce.number().positive().multipleOf(0.001),
 });
 

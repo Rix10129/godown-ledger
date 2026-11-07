@@ -46,6 +46,12 @@ export default async function ProductDetailPage({ params }: Props) {
   });
   if (!product) notFound();
 
+  const mills = await db.supplier.findMany({
+    where: { companyId },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
   const totalStock = product.batches.reduce((s, b) => s + b.quantity, 0);
   const isLow = totalStock <= product.reorderLevel;
 
@@ -219,7 +225,12 @@ export default async function ProductDetailPage({ params }: Props) {
 
       {/* Batches */}
       <div className="rounded-xl border border-slate-200 bg-white p-6">
-        <BatchSection productId={id} batches={batches} />
+        <BatchSection
+          productId={id}
+          batches={batches}
+          mills={mills}
+          supplierId={product.supplierId}
+        />
       </div>
     </div>
   );

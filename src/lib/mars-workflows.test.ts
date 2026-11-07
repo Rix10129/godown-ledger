@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { quantity, rate, thaanLengths } from "./mars-workflows";
 import { productSchema, batchSchema } from "./validations/inventory";
-test("catalogue prices may be unknown while received stock still needs real prices", () => {
+test("catalogue and receipt prices may be unknown; provided prices must be positive", () => {
   const p = productSchema.parse({ name: "Cotton cloth", unit: "METER" });
   assert.equal(p.purchasePrice, 0);
   assert.equal(p.salePrice, 0);
@@ -16,8 +16,18 @@ test("catalogue prices may be unknown while received stock still needs real pric
   );
   assert.equal(
     batchSchema.safeParse({ batchNumber: "LOT", quantity: 10 }).success,
-    false,
+    true,
   );
+  for (const value of [-1, 0, Infinity, NaN]) {
+    assert.equal(
+      batchSchema.safeParse({
+        batchNumber: "LOT",
+        quantity: 10,
+        purchasePrice: value,
+      }).success,
+      false,
+    );
+  }
 });
 test("thaan lengths are individual measurements with an exact metre total", () => {
   assert.deepEqual(

@@ -53,7 +53,7 @@ export function thaanLengths(raw: string, meters: Decimal) {
 export async function createCustomerOrder(
   companyId: string,
   customerId: string,
-  items: { productId: string; quantity: unknown }[],
+  items: { productId: string; quantity: unknown; rate?: unknown }[],
   notes?: string,
   requestId = crypto.randomUUID(),
 ) {
@@ -96,6 +96,8 @@ export async function createCustomerOrder(
           create: items.map((i) => ({
             productId: i.productId,
             quantity: quantity(i.quantity).toFixed(3),
+            rate:
+              i.rate == null || i.rate === "" ? null : rate(i.rate).toFixed(2),
           })),
         },
       },

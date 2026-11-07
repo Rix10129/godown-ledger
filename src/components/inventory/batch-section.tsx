@@ -26,6 +26,8 @@ type BatchRow = {
 interface BatchSectionProps {
   productId: string;
   batches: BatchRow[];
+  mills: { id: string; name: string }[];
+  supplierId: string | null;
 }
 
 function EditBatchPriceForm({
@@ -100,7 +102,12 @@ function EditBatchPriceForm({
   );
 }
 
-export function BatchSection({ productId, batches }: BatchSectionProps) {
+export function BatchSection({
+  productId,
+  batches,
+  mills,
+  supplierId,
+}: BatchSectionProps) {
   const [showForm, setShowForm] = useState(false);
   const [formKey, setFormKey] = useState(0);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
@@ -172,28 +179,45 @@ export function BatchSection({ productId, batches }: BatchSectionProps) {
                 <Input id="expiryDate" name="expiryDate" type="date" />
               </div>
             </div>
+            <label className="block text-sm">
+              Mill / supplier (required when receiving without prices)
+              <select
+                name="supplierId"
+                defaultValue={supplierId ?? ""}
+                className="block w-full rounded border p-2"
+              >
+                <option value="">Choose mill</option>
+                {mills.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="text-sm text-slate-500">
+              Leave prices blank to save for bookkeeper pricing. The lot becomes
+              sellable after pricing. Enter both prices only for opening stock.
+            </p>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="purchasePrice">Purchase Price *</Label>
+                <Label htmlFor="purchasePrice">Purchase Price (optional)</Label>
                 <Input
                   id="purchasePrice"
                   name="purchasePrice"
                   type="number"
                   min="0.01"
                   step="0.01"
-                  required
                   placeholder="0.00"
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="salePrice">Sale Price *</Label>
+                <Label htmlFor="salePrice">Sale Price (optional)</Label>
                 <Input
                   id="salePrice"
                   name="salePrice"
                   type="number"
                   min="0.01"
                   step="0.01"
-                  required
                   placeholder="0.00"
                 />
               </div>

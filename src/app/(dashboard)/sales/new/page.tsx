@@ -99,6 +99,7 @@ export default async function NewInvoicePage({
   const orderOptions = orders.flatMap((o) =>
     o.items.map((i) => ({
       id: i.id,
+      rate: i.rate == null ? null : Number(i.rate),
       customerId: o.customerId,
       productId: i.productId,
       label: `${o.orderNumber} — ${Number(i.quantity) - i.invoiceItems.reduce((n, l) => n + Number(l.quantity), 0)} remaining`,

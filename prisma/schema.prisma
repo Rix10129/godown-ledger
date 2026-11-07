@@ -1057,6 +1057,7 @@ model CustomerOrderItem {
   orderId      String
   productId    String
   quantity     Decimal           @db.Decimal(14, 3)
+  rate         Decimal?          @db.Decimal(12, 2)
   order        CustomerOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product      Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
   invoiceItems SaleInvoiceItem[]

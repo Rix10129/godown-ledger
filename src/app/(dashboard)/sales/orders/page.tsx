@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { authorize, hasPermission } from "@/lib/authorization";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { formatCurrency } from "@/lib/utils";
 import { WorkflowForm, OrderLines } from "@/components/workflow-form";
 import { createOrder, closeOrder, amendOrderItem } from "../../stock/actions";
 export const metadata = { title: "Customer orders" };
@@ -81,6 +82,7 @@ export default async function OrdersPage() {
               <thead>
                 <tr>
                   <th>Quality / colour</th>
+                  <th>Rate</th>
                   <th>Ordered</th>
                   <th>Delivered</th>
                   <th>Remaining</th>
@@ -97,6 +99,11 @@ export default async function OrdersPage() {
                     <tr key={i.id}>
                       <td>
                         {i.product.name} ({i.product.unit})
+                      </td>
+                      <td>
+                        {i.rate == null
+                          ? "Not agreed"
+                          : formatCurrency(i.rate.toString())}
                       </td>
                       <td>{Number(i.quantity)}</td>
                       <td>{delivered}</td>
@@ -131,13 +138,13 @@ export default async function OrdersPage() {
             hasPermission(auth.actor.role, "SALE_EDIT") && (
               <details>
                 <summary className="cursor-pointer underline">
-                  Correct ordered quantities
+                  Correct order quantities / rates
                 </summary>
                 {o.items.map((i) => (
                   <WorkflowForm
                     key={i.id}
                     action={amendOrderItem}
-                    label="Save corrected quantity"
+                    label="Save corrected order line"
                   >
                     <p>
                       {i.product.name} ({i.product.unit})
@@ -152,6 +159,16 @@ export default async function OrdersPage() {
                         step="0.001"
                         defaultValue={Number(i.quantity)}
                         required
+                      />
+                    </label>
+                    <label>
+                      Rate (Rs / unit) · optional
+                      <input
+                        name="rate"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        defaultValue={i.rate?.toString() ?? ""}
                       />
                     </label>
                     <label>
