@@ -15,7 +15,7 @@ export async function GET() {
         dbMs,
         timestamp: new Date().toISOString(),
         version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
-        release: "mars-workflows-20261029",
+        release: "mars-receipts-order-rates-20261107",
       },
       { headers: { "Cache-Control": "no-store" } },
     );
