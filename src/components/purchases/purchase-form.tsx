@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { createPurchase } from "@/app/(dashboard)/purchases/actions";
+import { validQuantity } from "@/lib/quantities";
 import { formatCurrency } from "@/lib/utils";
 import { Plus, Trash2, AlertCircle } from "lucide-react";
 
@@ -55,6 +56,7 @@ export function PurchaseForm({
 }: PurchaseFormProps) {
   const [lines, setLines] = useState<LineItem[]>([]);
   const [addProductId, setAddProductId] = useState("");
+  const [addQuantity, setAddQuantity] = useState("1");
   const [supplierId, setSupplierId] = useState(defaultSupplierId);
   const [orderDate, setOrderDate] = useState(
     () => new Date().toISOString().split("T")[0],
@@ -86,6 +88,10 @@ export function PurchaseForm({
     if (!addProductId) return;
     const product = products.find((p) => p.id === addProductId);
     if (!product) return;
+    if (!validQuantity(Number(addQuantity))) {
+      setError("Enter a positive quantity with at most three decimal places.");
+      return;
+    }
 
     const line: LineItem = {
       key: crypto.randomUUID(),
@@ -95,7 +101,7 @@ export function PurchaseForm({
       batchNumber: "",
       expiryDate: "",
       manufactureDate: "",
-      quantity: 1,
+      quantity: Number(addQuantity),
       purchasePrice: parseFloat(product.purchasePrice) || 0,
       salePrice: parseFloat(product.salePrice) || 0,
       discount: 0,
@@ -104,6 +110,7 @@ export function PurchaseForm({
 
     setLines((prev) => [...prev, line]);
     setAddProductId("");
+    setAddQuantity("1");
     setError(null);
   }
 
@@ -235,6 +242,18 @@ export function PurchaseForm({
                 </option>
               ))}
             </Select>
+            <label className="space-y-1 text-sm">
+              Quantity {products.find((p) => p.id === addProductId)?.unit}
+              <Input
+                aria-label="Purchase quantity"
+                type="number"
+                min="0.001"
+                step="0.001"
+                value={addQuantity}
+                onChange={(e) => setAddQuantity(e.target.value)}
+                className="w-28"
+              />
+            </label>
             <Button
               type="button"
               size="sm"
@@ -250,7 +269,8 @@ export function PurchaseForm({
         {lines.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 py-8 text-center">
             <p className="text-sm text-slate-400">
-              Select a product above and click Add
+              Select a product above and click Add to enter its quantity and
+              prices
             </p>
             <p className="text-xs text-slate-300 mt-1">
               Each line creates a new stock batch
@@ -274,7 +294,7 @@ export function PurchaseForm({
                     Expiry *
                   </th>
                   <th className="text-right px-3 py-2.5 font-medium text-slate-600 w-20">
-                    Qty
+                    Quantity
                   </th>
                   <th className="text-right px-3 py-2.5 font-medium text-slate-600 w-28">
                     Buy Price

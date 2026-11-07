@@ -41,6 +41,17 @@ export async function receiveCloth(
       error:
         "Enter a lot number and a positive quantity, up to 3 decimal places.",
     };
+  const manufactureDate = String(form.get("manufactureDate") ?? "");
+  const expiryDate = String(form.get("expiryDate") ?? "");
+  if (
+    [manufactureDate, expiryDate].some(
+      (date) =>
+        date &&
+        (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+          !Number.isFinite(Date.parse(date))),
+    )
+  )
+    return { error: "Enter valid batch dates." };
   const [supplier, product] = await Promise.all([
     db.supplier.findFirst({ where: { id: supplierId, companyId } }),
     db.product.findFirst({
@@ -49,6 +60,8 @@ export async function receiveCloth(
   ]);
   if (!supplier || !product)
     return { error: "Select a mill and a product from this company." };
+  if (form.get("receiptKind") === "bags" && product.unit !== "BAG")
+    return { error: "Select a product with the BAG stock unit." };
   await db.$transaction(async (tx) => {
     const date = new Date(),
       number = await allocateDocumentNumber(
@@ -69,6 +82,8 @@ export async function receiveCloth(
         netAmount: 0,
         notes: JSON.stringify({
           kind: "unpriced-receipt",
+          manufactureDate: manufactureDate || null,
+          expiryDate: expiryDate || null,
           lot,
           detail: String(form.get("detail") ?? "").slice(0, 500),
         }),
@@ -114,6 +129,8 @@ export async function priceReceipt(
         kind?: string;
         lot?: string;
         detail?: string;
+        manufactureDate?: string;
+        expiryDate?: string;
       };
       if (meta.kind !== "unpriced-receipt" || !meta.lot)
         throw new Error("This is not an unpriced receipt");
@@ -126,6 +143,10 @@ export async function priceReceipt(
           companyId,
           productId: item.productId,
           batchNumber: meta.lot,
+          manufactureDate: meta.manufactureDate
+            ? new Date(meta.manufactureDate)
+            : null,
+          expiryDate: meta.expiryDate ? new Date(meta.expiryDate) : null,
           purchasePrice: rate,
           salePrice: saleRate,
           quantity: item.quantity,

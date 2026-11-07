@@ -181,7 +181,14 @@ export async function amendOrderItem(_: WorkflowState, f: FormData) {
         );
       await tx.customerOrderItem.update({
         where: { id: item.id },
-        data: { quantity: qty.toFixed(3) },
+        data: {
+          quantity: qty.toFixed(3),
+          ...(f.has("rate")
+            ? {
+                rate: text(f, "rate") ? rate(text(f, "rate")).toFixed(2) : null,
+              }
+            : {}),
+        },
       });
       await tx.auditLog.create({
         data: {
@@ -195,6 +202,10 @@ export async function amendOrderItem(_: WorkflowState, f: FormData) {
           detail: JSON.stringify({
             oldQuantity: item.quantity.toString(),
             newQuantity: qty.toFixed(3),
+            oldRate: item.rate?.toString() ?? null,
+            newRate: f.has("rate")
+              ? text(f, "rate") || null
+              : (item.rate?.toString() ?? null),
           }),
         },
       });

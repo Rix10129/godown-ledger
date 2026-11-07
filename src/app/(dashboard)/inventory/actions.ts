@@ -1,5 +1,6 @@
 "use server";
 
+import { receiveCloth } from "@/app/(dashboard)/mills/actions";
 import { assertPermission } from "@/lib/authorization";
 
 import { db } from "@/lib/db";
@@ -210,6 +211,32 @@ export async function createBatch(
     salePrice,
     quantity,
   } = parsed.data;
+
+  if ((purchasePrice == null) !== (salePrice == null))
+    return {
+      error:
+        "Enter both prices for opening stock, or leave both blank to save for pricing.",
+    };
+  if (purchasePrice == null || salePrice == null) {
+    const receipt = new FormData();
+    receipt.set(
+      "supplierId",
+      String(formData.get("supplierId") || product.supplierId || ""),
+    );
+    receipt.set("productId", productId);
+    receipt.set("lot", batchNumber);
+    receipt.set("quantity", String(quantity));
+    receipt.set("manufactureDate", manufactureDate ?? "");
+    receipt.set("expiryDate", expiryDate ?? "");
+    receipt.set(
+      "detail",
+      "Received from product batch entry; prices to be agreed by the bookkeeper.",
+    );
+    const result = await receiveCloth(null, receipt);
+    if (result.error) return { error: result.error };
+    revalidatePath(`/inventory/${productId}`);
+    redirect("/receipts");
+  }
 
   // Check for duplicate batch number on same product
   const existing = await db.productBatch.findFirst({

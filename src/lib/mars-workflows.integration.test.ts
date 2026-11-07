@@ -280,7 +280,7 @@ test(
           companyId,
           customer.id,
           [
-            { productId: yarn.id, quantity: 500 },
+            { productId: yarn.id, quantity: 500, rate: "65.75" },
             { productId: cloth.id, quantity: 100 },
           ],
           undefined,
@@ -301,6 +301,18 @@ test(
         const item = await db.customerOrderItem.findFirstOrThrow({
           where: { orderId: order.id, productId: yarn.id },
         });
+        assert.equal(item.rate?.toString(), "65.75");
+        const unpriced = await db.customerOrderItem.findFirstOrThrow({
+          where: { orderId: order.id, productId: cloth.id },
+        });
+        assert.equal(unpriced.rate, null);
+        await assert.rejects(
+          () =>
+            createCustomerOrder(companyId, customer.id, [
+              { productId: yarn.id, quantity: 1, rate: "-1" },
+            ]),
+          /positive rate/,
+        );
         const { createInvoice, updateInvoice, reverseInvoice } =
           await import("@/app/(dashboard)/sales/actions");
         function delivery(qty: number) {
@@ -560,10 +572,19 @@ test(
               form({
                 id: item.id,
                 quantity: "600",
+                rate: "70.25",
                 reason: "Customer increased order",
               }),
             )
           )?.success,
+        );
+        assert.equal(
+          (
+            await db.customerOrderItem.findUniqueOrThrow({
+              where: { id: item.id },
+            })
+          ).rate?.toString(),
+          "70.25",
         );
         assert.ok(
           (

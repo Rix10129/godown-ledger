@@ -57,19 +57,25 @@ function OrderRows({
 }: {
   products: { id: string; name: string; unit: string }[];
 }) {
-  const [rows, setRows] = useState([{ key: 0, productId: "", quantity: "" }]);
+  const [rows, setRows] = useState([
+    { key: 0, productId: "", quantity: "", rate: "" },
+  ]);
   return (
     <div className="space-y-2">
       <input
         type="hidden"
         name="linesJson"
         value={JSON.stringify(
-          rows.map(({ productId, quantity }) => ({ productId, quantity })),
+          rows.map(({ productId, quantity, rate }) => ({
+            productId,
+            quantity,
+            rate,
+          })),
         )}
       />
       {rows.map((r, i) => (
         <div
-          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.6fr)_auto]"
+          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_auto]"
           key={r.key}
         >
           <select
@@ -107,6 +113,24 @@ function OrderRows({
               )
             }
           />
+          <label>
+            Rate (Rs / unit) · optional
+            <input
+              aria-label="Order rate"
+              placeholder="Rate"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={r.rate}
+              onChange={(e) =>
+                setRows(
+                  rows.map((v, k) =>
+                    k === i ? { ...v, rate: e.target.value } : v,
+                  ),
+                )
+              }
+            />
+          </label>
           {rows.length > 1 && (
             <button
               type="button"
@@ -121,7 +145,10 @@ function OrderRows({
         type="button"
         className="underline"
         onClick={() =>
-          setRows([...rows, { key: Date.now(), productId: "", quantity: "" }])
+          setRows([
+            ...rows,
+            { key: Date.now(), productId: "", quantity: "", rate: "" },
+          ])
         }
       >
         Add another quality / colour

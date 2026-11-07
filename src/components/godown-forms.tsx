@@ -64,9 +64,11 @@ export function MillForm() {
 export function ClothReceiptForm({
   mills,
   products,
+  kind = "cloth",
 }: {
   mills: { id: string; name: string }[];
   products: { id: string; name: string; unit: string }[];
+  kind?: "cloth" | "bags";
 }) {
   const [state, action, pending] = useActionState(receiveCloth, null);
   const [productId, setProductId] = useState("");
@@ -77,6 +79,7 @@ export function ClothReceiptForm({
   }, [state]);
   return (
     <form action={action} className="grid gap-x-5 gap-y-4 md:grid-cols-2">
+      <input type="hidden" name="receiptKind" value={kind} />
       <label className="office-field">
         Mill
         <select
@@ -97,7 +100,7 @@ export function ClothReceiptForm({
         </select>
       </label>
       <label className="office-field">
-        Cloth / product
+        {kind === "bags" ? "Bag product" : "Cloth / product"}
         <select
           aria-label="Product"
           name="productId"
@@ -108,7 +111,7 @@ export function ClothReceiptForm({
           onChange={(e) => setProductId(e.target.value)}
         >
           <option value="">
-            {products.length ? "Choose product" : "Add a cloth product first"}
+            {products.length ? "Choose product" : "Add a product first"}
           </option>
           {products.map((p) => (
             <option key={p.id} value={p.id}>
@@ -118,7 +121,7 @@ export function ClothReceiptForm({
         </select>
       </label>
       <label className="office-field">
-        Lot / thaan number
+        {kind === "bags" ? "Lot / bag reference" : "Lot / thaan number"}
         <input
           aria-label="Lot number"
           name="lot"
@@ -156,7 +159,7 @@ export function ClothReceiptForm({
           sell.
         </p>
         <button
-          aria-label="Record cloth for pricing"
+          aria-label={`Record ${kind} for pricing`}
           className="office-button"
           disabled={pending || !ready}
         >

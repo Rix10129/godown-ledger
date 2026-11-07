@@ -105,9 +105,14 @@ export default async function GodownPage({
               Price received cloth
             </Link>
           ) : (
-            <a href="#receive-cloth" className="office-button shrink-0">
-              ＋ Receive cloth
-            </a>
+            <div className="flex flex-wrap gap-2">
+              <a href="#receive-cloth" className="office-button shrink-0">
+                ＋ Receive cloth
+              </a>
+              <a href="#receive-bags" className="office-button shrink-0">
+                ＋ Receive bags
+              </a>
+            </div>
           )
         }
       >
@@ -170,6 +175,26 @@ export default async function GodownPage({
           )}
           <div className="office-panel-body">
             <ClothReceiptForm mills={mills} products={products} />
+          </div>
+        </section>
+      )}
+      {!bookkeeper && (
+        <section id="receive-bags" className="office-panel scroll-mt-6">
+          <div className="office-panel-head">
+            <h2>Bags received</h2>
+          </div>
+          <div className="office-panel-body">
+            {!products.some((p) => p.unit === "BAG") && (
+              <p className="office-note mb-4">
+                Add a product with the BAG unit under Cloth products &amp; lots
+                first.
+              </p>
+            )}
+            <ClothReceiptForm
+              mills={mills}
+              products={products.filter((p) => p.unit === "BAG")}
+              kind="bags"
+            />
           </div>
         </section>
       )}
