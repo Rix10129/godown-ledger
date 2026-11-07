@@ -191,3 +191,188 @@ test(
     }
   },
 );
+
+test(
+  "owner receives the first bag product at purchase cost, with retry safety and selling rate deferred",
+  { skip: process.env.RUN_DATABASE_CONCURRENCY_TESTS !== "1" },
+  async () => {
+    const company = await db.company.create({
+      data: { name: "Receipt purchase cost regression" },
+    });
+    const companyId = company.id;
+    try {
+      const user = await db.user.create({
+        data: {
+          companyId,
+          name: "Owner",
+          email: `${companyId}@example.test`,
+          password: "test-only",
+          role: "OWNER",
+        },
+      });
+      session = {
+        user: { id: user.id, companyId, name: user.name, role: "OWNER" },
+      };
+      const supplier = await db.supplier.create({
+        data: { companyId, name: "Sitara" },
+      });
+      const { receiveCloth, priceReceipt } =
+        await import("@/app/(dashboard)/mills/actions");
+      const key = crypto.randomUUID();
+      const values = {
+        requestKey: key,
+        supplierId: supplier.id,
+        productName: "20/s Cotton",
+        receiptKind: "bags",
+        lot: "COTTON-1",
+        quantity: "1000",
+        purchaseRate: "42.75",
+      };
+      for (const purchaseRate of ["0", "-2", "1.234", "NaN", "Infinity"]) {
+        assert.ok(
+          (await receiveCloth(null, form({ ...values, purchaseRate }))).error,
+        );
+      }
+      assert.equal(await db.product.count({ where: { companyId } }), 0);
+      const saved = await Promise.all([
+        receiveCloth(null, form(values)),
+        receiveCloth(null, form(values)),
+      ]);
+      assert.deepEqual(saved, [{ ok: true }, { ok: true }]);
+      const product = await db.product.findFirstOrThrow({
+        where: { companyId },
+      });
+      assert.equal(product.name, "20/s Cotton");
+      assert.equal(product.unit, "BAG");
+      assert.equal(await db.product.count({ where: { companyId } }), 1);
+      const receipt = await db.purchaseOrder.findUniqueOrThrow({
+        where: { id: key },
+        include: { items: true },
+      });
+      assert.equal(receipt.status, "POSTED");
+      assert.equal(receipt.netAmount.toString(), "42750");
+      assert.equal(receipt.items[0].purchasePrice.toString(), "42.75");
+      const batch = await db.productBatch.findUniqueOrThrow({
+        where: { id: receipt.items[0].batchId! },
+      });
+      assert.equal(batch.quantity, 1000);
+      assert.equal(
+        batch.salePrice.toString(),
+        "0",
+        "Selling rate is entered on the bill, never copied from cost",
+      );
+      assert.equal(await db.stockMovement.count({ where: { companyId } }), 1);
+      const journal = await db.journalEntry.findFirstOrThrow({
+        where: { companyId },
+        include: { lines: true },
+      });
+      assert.equal(
+        journal.lines
+          .filter((l) => l.debitAccountId)
+          .reduce((n, l) => n + Number(l.amount), 0),
+        42750,
+      );
+      assert.equal(
+        journal.lines
+          .filter((l) => l.creditAccountId)
+          .reduce((n, l) => n + Number(l.amount), 0),
+        42750,
+      );
+      assert.ok(
+        (
+          await receiveCloth(
+            null,
+            form({
+              ...values,
+              requestKey: crypto.randomUUID(),
+              productName: "20/S COTTON",
+            }),
+          )
+        ).error,
+      );
+      // Existing cloth can be priced later using purchase cost alone.
+      const cloth = await db.product.create({
+        data: {
+          companyId,
+          name: "Cloth",
+          unit: "METER",
+          purchasePrice: 0,
+          salePrice: 0,
+        },
+      });
+      const clothKey = crypto.randomUUID();
+      assert.deepEqual(
+        await receiveCloth(
+          null,
+          form({
+            requestKey: clothKey,
+            supplierId: supplier.id,
+            productId: cloth.id,
+            receiptKind: "cloth",
+            lot: "C-2",
+            quantity: "12.5",
+          }),
+        ),
+        { ok: true },
+      );
+      assert.deepEqual(
+        await priceReceipt(null, form({ id: clothKey, rate: "80.25" })),
+        { ok: true },
+      );
+      const priced = await db.purchaseOrder.findUniqueOrThrow({
+        where: { id: clothKey },
+      });
+      assert.equal(priced.netAmount.toString(), "1003.13");
+      session.user.role = "STOREKEEPER";
+      assert.ok(
+        (
+          await receiveCloth(
+            null,
+            form({
+              ...values,
+              requestKey: crypto.randomUUID(),
+              productId: product.id,
+            }),
+          )
+        ).error,
+      );
+      assert.ok(
+        (
+          await receiveCloth(
+            null,
+            form({
+              ...values,
+              requestKey: crypto.randomUUID(),
+              purchaseRate: "",
+              productName: "Forbidden product",
+            }),
+          )
+        ).error,
+      );
+      // A storekeeper can still record physical receipts against an existing product.
+      assert.deepEqual(
+        await receiveCloth(
+          null,
+          form({
+            supplierId: supplier.id,
+            productId: product.id,
+            lot: "KEEPER-1",
+            quantity: "2",
+            receiptKind: "bags",
+          }),
+        ),
+        { ok: true },
+      );
+      assert.equal(await db.stockMovement.count({ where: { companyId } }), 2);
+    } finally {
+      session = null;
+      await db.purchaseOrderItem.deleteMany({
+        where: { purchaseOrder: { companyId } },
+      });
+      await db.purchaseOrder.deleteMany({ where: { companyId } });
+      await db.stockMovement.deleteMany({ where: { companyId } });
+      await db.productBatch.deleteMany({ where: { companyId } });
+      await db.company.delete({ where: { id: companyId } });
+    }
+  },
+);
