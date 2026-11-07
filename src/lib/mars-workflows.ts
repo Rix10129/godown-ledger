@@ -53,14 +53,19 @@ export function thaanLengths(raw: string, meters: Decimal) {
 export async function createCustomerOrder(
   companyId: string,
   customerId: string,
-  items: { productId: string; quantity: unknown; rate?: unknown }[],
+  items: {
+    productId?: string;
+    name?: string;
+    unit?: string;
+    quantity: unknown;
+    rate?: unknown;
+  }[],
   notes?: string,
   requestId = crypto.randomUUID(),
+  allowCreateProducts = false,
 ) {
   if (!items.length || items.length > 100)
     throw new Error("Enter between 1 and 100 order lines");
-  if (new Set(items.map((i) => i.productId)).size !== items.length)
-    throw new Error("Combine repeated qualities into one order line");
   return db.$transaction(async (tx) => {
     const prior = await tx.customerOrder.findFirst({
       where: { id: requestId, companyId },
@@ -70,15 +75,61 @@ export async function createCustomerOrder(
       !(await tx.customer.findFirst({ where: { id: customerId, companyId } }))
     )
       throw new Error("Customer not found");
-    const products = await tx.product.count({
-      where: {
-        id: { in: items.map((i) => i.productId) },
-        companyId,
-        isActive: true,
-      },
-    });
-    if (products !== items.length)
-      throw new Error("One or more products are unavailable");
+    const resolved = [];
+    for (const item of items) {
+      let productId = item.productId;
+      if (!productId) {
+        const name = String(item.name ?? "")
+          .trim()
+          .replace(/\s+/g, " ");
+        const unit = item.unit;
+        if (
+          name.length < 2 ||
+          name.length > 160 ||
+          !["BAG", "METER", "KG"].includes(unit ?? "")
+        )
+          throw new Error("Enter a quality name and choose BAG, METER or KG.");
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${companyId + name.toLowerCase() + unit},0))`;
+        const matches = await tx.product.findMany({
+          where: {
+            companyId,
+            name: { equals: name, mode: "insensitive" },
+            unit: unit as "BAG" | "METER" | "KG",
+            isActive: true,
+          },
+          select: { id: true },
+        });
+        if (matches.length > 1)
+          throw new Error(
+            "More than one product has this name and unit. Ask the owner to distinguish the quality names.",
+          );
+        if (matches.length) productId = matches[0].id;
+        else {
+          if (!allowCreateProducts)
+            throw new Error("Ask the owner to add this new quality first.");
+          productId = (
+            await tx.product.create({
+              data: {
+                companyId,
+                name,
+                unit: unit as "BAG" | "METER" | "KG",
+                purchasePrice: 0,
+                salePrice: 0,
+              },
+            })
+          ).id;
+        }
+      }
+      if (
+        !(await tx.product.findFirst({
+          where: { id: productId, companyId, isActive: true },
+        }))
+      )
+        throw new Error("Product is unavailable");
+      resolved.push({ ...item, productId });
+    }
+    if (new Set(resolved.map((i) => i.productId)).size !== resolved.length)
+      throw new Error("Combine repeated qualities into one order line");
     const orderNumber = await allocateDocumentNumber(
       tx,
       companyId,
@@ -93,7 +144,7 @@ export async function createCustomerOrder(
         orderNumber,
         notes,
         items: {
-          create: items.map((i) => ({
+          create: resolved.map((i) => ({
             productId: i.productId,
             quantity: quantity(i.quantity).toFixed(3),
             rate:
@@ -834,4 +885,81 @@ export async function reverseThaanMeasurement(
       })),
     });
   });
+}
+
+/** Allocate deliveries to the oldest open order of this customer and product. */
+export async function allocateOrderFifo<
+  T extends {
+    productId: string;
+    quantity: number;
+    orderItemId?: string;
+    isBonus?: boolean;
+  },
+>(
+  tx: Transaction,
+  companyId: string,
+  customerId: string | null,
+  lines: T[],
+): Promise<T[]> {
+  if (!customerId) return lines;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${companyId + ":orders:" + customerId},0))`;
+  const orders = await tx.customerOrder.findMany({
+    where: { companyId, customerId, status: "OPEN" },
+    orderBy: [{ orderDate: "asc" }, { orderNumber: "asc" }, { id: "asc" }],
+    select: { id: true },
+  });
+  for (const order of orders)
+    await tx.$queryRaw`SELECT id FROM "CustomerOrder" WHERE id=${order.id} AND "companyId"=${companyId} FOR UPDATE`;
+  const items = await tx.customerOrderItem.findMany({
+    where: {
+      orderId: { in: orders.map((o) => o.id) },
+      order: { companyId, customerId, status: "OPEN" },
+    },
+    include: {
+      invoiceItems: {
+        where: { invoice: { status: "POSTED" } },
+        select: { quantity: true },
+      },
+    },
+  });
+  const remaining = new Map(
+    items.map((i) => [
+      i.id,
+      new Decimal(i.quantity.toString()).minus(
+        i.invoiceItems.reduce((sum, l) => sum.plus(l.quantity), new Decimal(0)),
+      ),
+    ]),
+  );
+  // Explicit legacy links reserve their quantities before automatic allocation.
+  for (const line of lines)
+    if (line.orderItemId && remaining.has(line.orderItemId))
+      remaining.set(
+        line.orderItemId,
+        remaining.get(line.orderItemId)!.minus(line.quantity),
+      );
+  const result: T[] = [];
+  for (const line of lines) {
+    if (line.orderItemId || line.isBonus) {
+      result.push(line);
+      continue;
+    }
+    let left = quantity(line.quantity);
+    for (const order of orders)
+      for (const item of items.filter(
+        (i) => i.orderId === order.id && i.productId === line.productId,
+      )) {
+        const available = remaining.get(item.id)!;
+        if (left.lte(0) || available.lte(0)) continue;
+        const take = Decimal.min(left, available);
+        result.push({
+          ...line,
+          quantity: take.toNumber(),
+          orderItemId: item.id,
+        });
+        remaining.set(item.id, available.minus(take));
+        left = left.minus(take);
+      }
+    if (left.gt(0)) result.push({ ...line, quantity: left.toNumber() });
+  }
+  return result;
 }
