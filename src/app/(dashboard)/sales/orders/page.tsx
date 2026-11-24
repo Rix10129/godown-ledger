@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { WorkflowForm, OrderLines } from "@/components/workflow-form";
+import { OrderCustomerSelect } from "@/components/sales/order-customer-select";
 import { createOrder, closeOrder, amendOrderItem } from "../../stock/actions";
 export const metadata = { title: "Customer orders" };
 export default async function OrdersPage() {
@@ -47,17 +48,10 @@ export default async function OrdersPage() {
       </p>
       <WorkflowForm action={createOrder} label="Create customer order">
         <h2 className="font-semibold">New order</h2>
-        <label className="block">
-          Customer
-          <select required name="customerId">
-            <option value="">Select customer</option>
-            {customers.map((c) => (
-              <option value={c.id} key={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <OrderCustomerSelect
+          customers={customers}
+          canCreateCustomer={hasPermission(auth.actor.role, "MASTER_CREATE")}
+        />
         <OrderLines />
         <label className="block">
           Notes
