@@ -1,5 +1,5 @@
 "use server";
-import { validateOrderDelivery } from "@/lib/mars-workflows";
+import { allocateOrderFifo, validateOrderDelivery } from "@/lib/mars-workflows";
 
 import Decimal from "decimal.js";
 import { validQuantity } from "@/lib/quantities";
@@ -515,7 +515,13 @@ export async function createInvoice(
 
   try {
     await db.$transaction(async (tx) => {
-      await validateOrderDelivery(tx, companyId, customerId, lines);
+      const postingLines = await allocateOrderFifo(
+        tx,
+        companyId,
+        customerId,
+        lines,
+      );
+      await validateOrderDelivery(tx, companyId, customerId, postingLines);
       if (draftId) {
         const draft = await tx.invoiceDraft.findFirst({
           where: { id: draftId, companyId, userId },
@@ -535,7 +541,7 @@ export async function createInvoice(
 
       // Compute totals
       const { totalAmount, taxAmount, netAmount } = calculateDocumentTotals(
-        lines,
+        postingLines,
         (l) => l.salePrice,
         discountAmount,
       );
@@ -630,7 +636,7 @@ export async function createInvoice(
       }
 
       // Process each line item
-      for (const line of lines) {
+      for (const line of postingLines) {
         // Verify batch belongs to company and the right product
         const batch = await tx.productBatch.findFirst({
           where: { id: line.batchId, companyId, productId: line.productId },

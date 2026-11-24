@@ -376,3 +376,145 @@ test(
     }
   },
 );
+
+test(
+  "typed qualities reuse products and posted bills allocate oldest customer orders first",
+  { skip: process.env.RUN_DATABASE_CONCURRENCY_TESTS !== "1" },
+  async () => {
+    const company = await db.company.create({
+      data: { name: "FIFO regression" },
+    });
+    const companyId = company.id;
+    try {
+      const user = await db.user.create({
+        data: {
+          companyId,
+          name: "Owner",
+          email: companyId + "@example.test",
+          password: "test-only",
+          role: "OWNER",
+        },
+      });
+      session = {
+        user: { id: user.id, companyId, name: user.name, role: "OWNER" },
+      };
+      const customer = await db.customer.create({
+        data: { companyId, name: "Ahmad" },
+      });
+      const other = await db.customer.create({
+        data: { companyId, name: "Other buyer" },
+      });
+      const { createCustomerOrder } = await import("./mars-workflows");
+      const first = await createCustomerOrder(
+        companyId,
+        customer.id,
+        [{ name: "20s Cotton", unit: "BAG", quantity: 100 }],
+        undefined,
+        crypto.randomUUID(),
+        true,
+      );
+      const second = await createCustomerOrder(
+        companyId,
+        customer.id,
+        [{ name: "20S Cotton", unit: "BAG", quantity: 200 }],
+        undefined,
+        crypto.randomUUID(),
+        true,
+      );
+      const item1 = await db.customerOrderItem.findFirstOrThrow({
+        where: { orderId: first.id },
+      });
+      const item2 = await db.customerOrderItem.findFirstOrThrow({
+        where: { orderId: second.id },
+      });
+      assert.equal(item1.productId, item2.productId);
+      await createCustomerOrder(companyId, other.id, [
+        { productId: item1.productId, quantity: 50 },
+      ]);
+      await createCustomerOrder(
+        companyId,
+        customer.id,
+        [{ name: "Different cloth", unit: "METER", quantity: 70 }],
+        undefined,
+        crypto.randomUUID(),
+        true,
+      );
+      const batch = await db.productBatch.create({
+        data: {
+          companyId,
+          productId: item1.productId,
+          batchNumber: "FIFO-1",
+          quantity: 1000,
+          initialQuantity: 1000,
+          purchasePrice: 10,
+          salePrice: 20,
+        },
+      });
+      const { createInvoice } = await import("@/app/(dashboard)/sales/actions");
+      async function deliver(qty: number) {
+        await assert.rejects(async () => {
+          const result = await createInvoice(
+            null,
+            form({
+              customerId: customer.id,
+              paymentMode: "CREDIT",
+              linesJson: JSON.stringify([
+                {
+                  productId: item1.productId,
+                  batchId: batch.id,
+                  quantity: qty,
+                  salePrice: 25,
+                  discount: 0,
+                  taxRate: 0,
+                },
+              ]),
+            }),
+          );
+          throw new Error(JSON.stringify(result));
+        }, /redirect:/);
+      }
+      await deliver(150);
+      const delivered = await db.saleInvoiceItem.findMany({
+        where: { invoice: { companyId, status: "POSTED" } },
+      });
+      assert.equal(
+        delivered.find((i) => i.orderItemId === item1.id)?.quantity,
+        100,
+      );
+      assert.equal(
+        delivered.find((i) => i.orderItemId === item2.id)?.quantity,
+        50,
+      );
+      assert.ok(delivered.every((i) => Number(i.salePrice) === 25));
+      await Promise.all([deliver(100), deliver(75)]);
+      const all = await db.saleInvoiceItem.findMany({
+        where: { invoice: { companyId, status: "POSTED" } },
+      });
+      assert.equal(
+        all
+          .filter((i) => i.orderItemId === item1.id)
+          .reduce((n, i) => n + i.quantity, 0),
+        100,
+      );
+      assert.equal(
+        all
+          .filter((i) => i.orderItemId === item2.id)
+          .reduce((n, i) => n + i.quantity, 0),
+        200,
+      );
+      assert.equal(
+        all.filter((i) => !i.orderItemId).reduce((n, i) => n + i.quantity, 0),
+        25,
+      );
+    } finally {
+      session = null;
+      await db.saleInvoiceItem.deleteMany({
+        where: { invoice: { companyId } },
+      });
+      await db.customerOrder.deleteMany({ where: { companyId } });
+      await db.stockMovement.deleteMany({ where: { companyId } });
+      await db.productBatch.deleteMany({ where: { companyId } });
+      await db.company.delete({ where: { id: companyId } });
+    }
+  },
+);

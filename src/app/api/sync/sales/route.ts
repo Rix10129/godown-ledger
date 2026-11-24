@@ -1,3 +1,4 @@
+import { allocateOrderFifo, validateOrderDelivery } from "@/lib/mars-workflows";
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveSession } from "@/lib/session";
 import Decimal from "decimal.js";
@@ -16,6 +17,7 @@ import { lineBase, calculateDocumentTotals } from "@/lib/invoice-math";
 const VALID_PAYMENT_MODES = ["CASH", "BANK", "CHEQUE", "CREDIT"] as const;
 
 type LineInput = {
+  orderItemId?: string;
   productId: string;
   batchId: string;
   quantity: number;
@@ -87,6 +89,18 @@ export async function POST(req: NextRequest) {
 
   try {
     await db.$transaction(async (tx) => {
+      const postingLines = await allocateOrderFifo(
+        tx,
+        companyId,
+        customerId || null,
+        lines,
+      );
+      await validateOrderDelivery(
+        tx,
+        companyId,
+        customerId || null,
+        postingLines,
+      );
       const invoiceDateValue = new Date(body.invoiceDate || Date.now());
       const invoiceNumber = await allocateDocumentNumber(
         tx,
@@ -96,7 +110,7 @@ export async function POST(req: NextRequest) {
       );
 
       const { totalAmount, taxAmount, netAmount } = calculateDocumentTotals(
-        lines,
+        postingLines,
         (l) => l.salePrice,
         disc,
       );
@@ -166,7 +180,7 @@ export async function POST(req: NextRequest) {
       }
 
       let stockCost = new Decimal(0);
-      for (const line of lines) {
+      for (const line of postingLines) {
         const batch = await tx.productBatch.findFirst({
           where: { id: line.batchId, companyId, productId: line.productId },
         });
@@ -219,6 +233,7 @@ export async function POST(req: NextRequest) {
           data: {
             invoiceId: invoice.id,
             productId: line.productId,
+            orderItemId: line.orderItemId || null,
             batchId: line.batchId,
             quantity: line.quantity,
             salePrice: line.salePrice,

@@ -954,48 +954,12 @@ export function InvoiceForm({
                             Gazana (metres) · rate per metre
                           </p>
                         )}
-                        {!editContext && (
-                          <Select
-                            aria-label={`Customer order for ${line.productName}`}
-                            value={line.orderItemId ?? ""}
-                            onChange={(e) =>
-                              setLines((prev) =>
-                                prev.map((l) =>
-                                  l.key === line.key
-                                    ? {
-                                        ...l,
-                                        orderItemId:
-                                          e.target.value || undefined,
-                                        salePrice:
-                                          orderOptions.find(
-                                            (o) => o.id === e.target.value,
-                                          )?.rate ??
-                                          Number(
-                                            products
-                                              .find((p) => p.id === l.productId)
-                                              ?.batches.find(
-                                                (b) => b.id === l.batchId,
-                                              )?.salePrice ?? l.salePrice,
-                                          ),
-                                      }
-                                    : l,
-                                ),
-                              )
-                            }
-                          >
-                            <option value="">No customer order</option>
-                            {orderOptions
-                              .filter(
-                                (o) =>
-                                  o.customerId === customerId &&
-                                  o.productId === line.productId,
-                              )
-                              .map((o) => (
-                                <option key={o.id} value={o.id}>
-                                  {o.label}
-                                </option>
-                              ))}
-                          </Select>
+                        {!editContext && customerId && (
+                          <p className="text-xs text-slate-500">
+                            Delivery adjusts this customer’s oldest pending
+                            orders for this quality automatically (FIFO).
+                            Selling rate stays as entered on this bill.
+                          </p>
                         )}
                         {!editContext && (
                           <Select
